@@ -1,0 +1,328 @@
+from FedMA.utils import *
+
+import argparse
+import numpy as np
+
+import copy
+import logging
+from FedMA.matching.pfnm import layer_wise_group_descent
+from FedMA.matching.pfnm import block_patching, patch_weights
+
+
+
+def add_fit_args(parser):
+    """
+    parser : argparse.ArgumentParser
+    return a parser added with args required by fit
+    """
+    # Training settings
+    parser.add_argument('--model', type=str, default='lenet', metavar='N',
+                        help='neural network used in training')
+    parser.add_argument('--dataset', type=str, default='cifar10', metavar='N',
+                        help='dataset used for training')
+    parser.add_argument('--partition', type=str, default='homo', metavar='N',
+                        help='how to partition the dataset on local workers')
+    parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                        help='input batch size for training (default: 64)')
+    parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+                        help='learning rate (default: 0.01)')
+    parser.add_argument('--retrain_lr', type=float, default=0.1, metavar='RLR',
+                        help='learning rate using in specific for local network retrain (default: 0.01)')
+    parser.add_argument('--fine_tune_lr', type=float, default=0.1, metavar='FLR',
+                        help='learning rate using in specific for fine tuning the softmax layer on the data center (default: 0.01)')
+    parser.add_argument('--epochs', type=int, default=5, metavar='EP',
+                        help='how many epochs will be trained in a training process')
+    parser.add_argument('--retrain_epochs', type=int, default=10, metavar='REP',
+                        help='how many epochs will be trained in during the locally retraining process')
+    parser.add_argument('--fine_tune_epochs', type=int, default=10, metavar='FEP',
+                        help='how many epochs will be trained in during the fine tuning process')
+    parser.add_argument('--partition_step_size', type=int, default=6, metavar='PSS',
+                        help='how many groups of partitions we will have')
+    parser.add_argument('--local_points', type=int, default=5000, metavar='LP',
+                        help='the approximate fixed number of data points we will have on each local worker')
+    parser.add_argument('--partition_step', type=int, default=0, metavar='PS',
+                        help='how many sub groups we are going to use for a particular training process')                          
+    parser.add_argument('--n_nets', type=int, default=2, metavar='NN',
+                        help='number of workers in a distributed cluster')
+    parser.add_argument('--oneshot_matching', type=bool, default=False, metavar='OM',
+                        help='if the code is going to conduct one shot matching')
+    parser.add_argument('--retrain', type=bool, default=False, 
+                            help='whether to retrain the model or load model locally')
+    parser.add_argument('--rematching', type=bool, default=False, 
+                            help='whether to recalculating the matching process (this is for speeding up the debugging process)')
+    parser.add_argument('--comm_type', type=str, default='layerwise', 
+                            help='which type of communication strategy is going to be used: layerwise/blockwise')    
+    parser.add_argument('--comm_round', type=int, default=10, 
+                            help='how many round of communications we shoud use')  
+    args = parser.parse_args()
+    return args
+
+
+
+
+
+def BBP_MAP(nets_list, model_meta_data, layer_type, net_dataidx_map, 
+                            averaging_weights, args, 
+                            device="cpu"):
+    # starting the neural matching
+    models = nets_list
+    cls_freqs = traindata_cls_counts
+    n_classes = args_net_config[-1]
+    it=5
+    sigma=args_pdm_sig 
+    sigma0=args_pdm_sig0
+    gamma=args_pdm_gamma
+    assignments_list = []
+    
+    batch_weights = pdm_prepare_full_weights_cnn(models, device=device)
+    raw_batch_weights = copy.deepcopy(batch_weights)
+    
+    logging.info("=="*15)
+    logging.info("Weights shapes: {}".format([bw.shape for bw in batch_weights[0]]))
+
+    batch_freqs = pdm_prepare_freq(cls_freqs, n_classes)
+    res = {}
+    best_test_acc, best_train_acc, best_weights, best_sigma, best_gamma, best_sigma0 = -1, -1, None, -1, -1, -1
+
+    gamma = 7.0
+    sigma = 1.0
+    sigma0 = 1.0
+
+    n_layers = int(len(batch_weights[0]) / 2)
+    num_workers = len(nets_list)
+    matching_shapes = []
+
+    first_fc_index = None
+
+    for layer_index in range(1, n_layers):
+        layer_hungarian_weights, assignment, L_next = layer_wise_group_descent(
+             batch_weights=batch_weights, 
+             layer_index=layer_index,
+             sigma0_layers=sigma0, 
+             sigma_layers=sigma, 
+             batch_frequencies=batch_freqs, 
+             it=it, 
+             gamma_layers=gamma, 
+             model_meta_data=model_meta_data,
+             model_layer_type=layer_type,
+             n_layers=n_layers,
+             matching_shapes=matching_shapes,
+             args=args
+             )
+        assignments_list.append(assignment)
+        
+        # iii) load weights to the model and train the whole thing
+        type_of_patched_layer = layer_type[2 * (layer_index + 1) - 2]
+        if 'conv' in type_of_patched_layer or 'features' in type_of_patched_layer:
+            l_type = "conv"
+        elif 'fc' in type_of_patched_layer or 'classifier' in type_of_patched_layer:
+            l_type = "fc"
+
+        type_of_this_layer = layer_type[2 * layer_index - 2]
+        type_of_prev_layer = layer_type[2 * layer_index - 2 - 2]
+        first_fc_identifier = (('fc' in type_of_this_layer or 'classifier' in type_of_this_layer) and ('conv' in type_of_prev_layer or 'features' in type_of_this_layer))
+        
+        if first_fc_identifier:
+            first_fc_index = layer_index
+        
+        matching_shapes.append(L_next)
+        tempt_weights =  [([batch_weights[w][i] for i in range(2 * layer_index - 2)] + copy.deepcopy(layer_hungarian_weights)) for w in range(num_workers)]
+
+        # i) permutate the next layer wrt matching result
+        for worker_index in range(num_workers):
+            if first_fc_index is None:
+                if l_type == "conv":
+                    patched_weight = block_patching(batch_weights[worker_index][2 * (layer_index + 1) - 2], 
+                                        L_next, assignment[worker_index], 
+                                        layer_index+1, model_meta_data,
+                                        matching_shapes=matching_shapes, layer_type=l_type,
+                                        dataset=args.dataset, network_name=args.model)
+                elif l_type == "fc":
+                    patched_weight = block_patching(batch_weights[worker_index][2 * (layer_index + 1) - 2].T, 
+                                        L_next, assignment[worker_index], 
+                                        layer_index+1, model_meta_data,
+                                        matching_shapes=matching_shapes, layer_type=l_type,
+                                        dataset=args.dataset, network_name=args.model).T
+
+            elif layer_index >= first_fc_index:
+                patched_weight = patch_weights(batch_weights[worker_index][2 * (layer_index + 1) - 2].T, L_next, assignment[worker_index]).T
+
+            tempt_weights[worker_index].append(patched_weight)
+
+        # ii) prepare the whole network weights
+        for worker_index in range(num_workers):
+            for lid in range(2 * (layer_index + 1) - 1, len(batch_weights[0])):
+                tempt_weights[worker_index].append(batch_weights[worker_index][lid])
+
+        retrained_nets = []
+        for worker_index in range(num_workers):
+            dataidxs = net_dataidx_map[worker_index]
+            train_dl_local, test_dl_local = get_dataloader(args.dataset, args_datadir, args.batch_size, 32, dataidxs)
+
+            logger.info("Re-training on local worker: {}, starting from layer: {}".format(worker_index, 2 * (layer_index + 1) - 2))
+            retrained_cnn = local_retrain((train_dl_local,test_dl_local), tempt_weights[worker_index], args, 
+                                            freezing_index=(2 * (layer_index + 1) - 2), device=device)
+            retrained_nets.append(retrained_cnn)
+        batch_weights = pdm_prepare_full_weights_cnn(retrained_nets, device=device)
+
+    ## we handle the last layer carefully here ...
+    ## averaging the last layer
+    matched_weights = []
+    num_layers = len(batch_weights[0])
+
+    with open('./matching_weights_cache/matched_layerwise_weights', 'wb') as weights_file:
+        pickle.dump(batch_weights, weights_file)
+
+    last_layer_weights_collector = []
+
+    for i in range(num_workers):
+        # firstly we combine last layer's weight and bias
+        bias_shape = batch_weights[i][-1].shape
+        last_layer_bias = batch_weights[i][-1].reshape((1, bias_shape[0]))
+        last_layer_weights = np.concatenate((batch_weights[i][-2], last_layer_bias), axis=0)
+        
+        # the directed normalization doesn't work well, let's try weighted averaging
+        last_layer_weights_collector.append(last_layer_weights)
+
+    last_layer_weights_collector = np.array(last_layer_weights_collector)
+    
+    avg_last_layer_weight = np.zeros(last_layer_weights_collector[0].shape, dtype=np.float32)
+
+    for i in range(n_classes):
+        avg_weight_collector = np.zeros(last_layer_weights_collector[0][:, 0].shape, dtype=np.float32)
+        for j in range(num_workers):
+            avg_weight_collector += averaging_weights[j][i]*last_layer_weights_collector[j][:, i]
+        avg_last_layer_weight[:, i] = avg_weight_collector
+
+    #avg_last_layer_weight = np.mean(last_layer_weights_collector, axis=0)
+    for i in range(num_layers):
+        if i < (num_layers - 2):
+            matched_weights.append(batch_weights[0][i])
+
+    matched_weights.append(avg_last_layer_weight[0:-1, :])
+    matched_weights.append(avg_last_layer_weight[-1, :])
+    return matched_weights, assignments_list
+
+def pdm_prepare_full_weights_cnn(nets, device="cpu"):
+    """
+    we extract all weights of the conv nets out here:
+    """
+    weights = []
+    for net_i, net in enumerate(nets):
+        net_weights = []
+        statedict = net.state_dict()
+
+        for param_id, (k, v) in enumerate(statedict.items()):
+            if device == "cpu":
+                if 'fc' in k or 'classifier' in k:
+                    if 'weight' in k:
+                        net_weights.append(v.numpy().T)
+                    else:
+                        net_weights.append(v.numpy())
+                elif 'conv' in k or 'features' in k:
+                    if 'weight' in k:
+                        _weight_shape = v.size()
+                        if len(_weight_shape) == 4:
+                            net_weights.append(v.numpy().reshape(_weight_shape[0], _weight_shape[1]*_weight_shape[2]*_weight_shape[3]))
+                        else:
+                            pass
+                    else:
+                        net_weights.append(v.numpy())
+            else:
+                if 'fc' in k or 'classifier' in k:
+                    if 'weight' in k:
+                        net_weights.append(v.cpu().numpy().T)
+                    else:
+                        net_weights.append(v.cpu().numpy())
+                elif 'conv' in k or 'features' in k:
+                    if 'weight' in k:
+                        _weight_shape = v.size()
+                        if len(_weight_shape) == 4:
+                            net_weights.append(v.cpu().numpy().reshape(_weight_shape[0], _weight_shape[1]*_weight_shape[2]*_weight_shape[3]))
+                        else:
+                            pass
+                    else:
+                        net_weights.append(v.cpu().numpy())
+        weights.append(net_weights)
+    return weights
+
+def local_train(nets, args, net_dataidx_map, device="cpu"):
+    # save local dataset
+    local_datasets = []
+    for net_id, net in nets.items():
+        if args.retrain:
+            dataidxs = net_dataidx_map[net_id]
+            logger.info("Training network %s. n_training: %d" % (str(net_id), len(dataidxs)))
+            # move the model to cuda device:
+            net.to(device)
+
+            train_dl_local, test_dl_local = get_dataloader(args.dataset, args_datadir, args.batch_size, 32, dataidxs)
+            train_dl_global, test_dl_global = get_dataloader(args.dataset, args_datadir, args.batch_size, 32)
+
+            local_datasets.append((train_dl_local, test_dl_local))
+
+            # switch to global test set here
+            trainacc, testacc = train_net(net_id, net, train_dl_local, test_dl_global, args.epochs, args.lr, args, device=device)
+            # saving the trained models here
+            save_model(net, net_id)
+        else:
+            load_model(net, net_id, device=device)
+
+    nets_list = list(nets.values())
+    return nets_list
+
+###------------------------
+args_pdm_sig = 1.0
+args_pdm_sig0 = 1.0
+args_pdm_gamma = 1.0
+dataset = 'cifar10'
+args_datadir = "./data/cifar10"
+args_logdir = "logs/cifar10"
+partition = 'homo'
+n_nets = 2
+args_alpha = 0.5
+args_net_config = [3072, 100, 10]
+
+device = "cuda"
+
+
+args = add_fit_args(argparse.ArgumentParser(description='Probabilistic Federated CNN Matching'))
+
+args.model= "vgg"
+
+
+y_train, net_dataidx_map, traindata_cls_counts = partition_data(dataset, args_datadir, args_logdir, partition, n_nets, args_alpha, args=args)
+
+n_classes = len(np.unique(y_train))
+
+print('n_classes='+str(n_classes))
+
+nets, model_meta_data, layer_type = init_models(args_net_config, 2, args=args)
+
+
+# average weight---------------
+averaging_weights = np.zeros((args.n_nets, n_classes), dtype=np.float32)
+
+for i in range(n_classes):
+    total_num_counts = 0
+    worker_class_counts = [0] * args.n_nets
+    for j in range(args.n_nets):
+        if i in traindata_cls_counts[j].keys():
+            total_num_counts += traindata_cls_counts[j][i]
+            worker_class_counts[j] = traindata_cls_counts[j][i]
+        else:
+            total_num_counts += 0
+            worker_class_counts[j] = 0
+    averaging_weights[:, i] = worker_class_counts / total_num_counts
+
+
+
+#local training---------------------
+nets_list = local_train(nets, args, net_dataidx_map, device=device)
+
+
+
+# BBP_MAP
+hungarian_weights, assignments_list = BBP_MAP(nets_list, model_meta_data, layer_type, net_dataidx_map, averaging_weights, args, device=device)
+
+
