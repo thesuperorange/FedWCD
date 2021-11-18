@@ -7,7 +7,7 @@ import torchvision.models as models
 from torch.autograd import Variable
 import numpy as np
 from model.utils.config import cfg
-from model.rpn.rpn import _RPN
+from model.rpn.rpn_distill import _RPN
 
 from model.roi_layers import ROIAlign, ROIPool
 
@@ -19,10 +19,11 @@ import time
 import pdb
 from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta
 
-class _fasterRCNN(nn.Module):
+class _fasterRCNNKD(nn.Module):
     """ faster RCNN """
-    def __init__(self, classes, class_agnostic):
-        super(_fasterRCNN, self).__init__()
+    def __init__(self, classes, class_agnostic, temperature=1.):
+        super(_fasterRCNNKD, self).__init__()
+        self.T = temperature
         self.classes = classes
         self.n_classes = len(classes)
         self.class_agnostic = class_agnostic
@@ -51,7 +52,7 @@ class _fasterRCNN(nn.Module):
         base_feat = self.RCNN_base(im_data)
 
         # feed base feature map tp RPN to obtain rois
-        rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
+        rois, rpn_loss_cls, rpn_loss_bbox, rpn_Ps, rpn_Rs, rpn_gt = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
@@ -92,22 +93,44 @@ class _fasterRCNN(nn.Module):
         # compute object classification probability
         cls_score = self.RCNN_cls_score(pooled_feat)
         cls_prob = F.softmax(cls_score, 1)
+        
+        # distill only return
+        cls_prob_DISTILL = F.softmax(cls_score/self.T, 1)
+
 
         RCNN_loss_cls = 0
         RCNN_loss_bbox = 0
 
         if self.training:
             # classification loss
-            RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
+            RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)  # softmax already included
+            #print(RCNN_loss_cls)
+            
+           ## print(cls_score.shape)
+           # print(rois_label.shape)
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
 
 
+        
+#         rpn_b_test = F.mse_loss(rpn_Rs, rpn_gt)
+#         print('[fasterRCNN_KD] rpn_loss_b: %.4f' % (rpn_b_test.item()))        
+        
+#         rcn_b_test = F.mse_loss(bbox_pred, rois_target)
+#         print('[fasterRCNN_KD] rcn_loss_b: %.4f' % (rpn_b_test.item()))
+        
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
-        bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
+        #print(cls_prob.shape)
+        # distill Ps 
+        cls_prob_DISTILL = cls_prob_DISTILL.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label
+        # comment out for KD
+        #bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
+        
+        
+
+        return rois, cls_prob_DISTILL, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label, rpn_Ps, rpn_Rs, base_feat, rois_target,rpn_gt
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
