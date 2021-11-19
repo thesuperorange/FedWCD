@@ -318,7 +318,7 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
             rois, rcn_Ps, rcn_Rs, rpn_Lhard, rpn_LsL1, \
             rcn_Lhard, rcn_LsL1, rois_label, rpn_Ps, rpn_Rs, fmap_s, rcn_gt, rpn_gt = fasterRCNN_s(im_data, im_info, gt_boxes, num_boxes)
             # teacher net
-            _, rcn_Pt, rcn_Rt, _, _, _, _, _, rpn_Pt, rpn_Rt, fmap_t, _,_ = fasterRCNN_t(im_data, im_info, gt_boxes, num_boxes)
+            _, rcn_Pt, rcn_Rt, rpn_Lhard_t, rpn_LsL1_t, rcn_Lhard_t, rcn_LsL1_t, _, rpn_Pt, rpn_Rt, fmap_t, _,_ = fasterRCNN_t(im_data, im_info, gt_boxes, num_boxes)
 
 
             # Lhint=|V-Z|^2
@@ -367,6 +367,9 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
                     loss_rcnn_box = rcn_loss_reg.item()
                     fg_cnt = torch.sum(rois_label.data.ne(0))
                     bg_cnt = rois_label.data.numel() - fg_cnt
+                    
+                print("[t]rcn_LsL1_t: %.4f, [s]rcn_LsL1: %.4f, [t]rpn_LsL1_t: %.4f, [s]rpn_LsL1 %.4f" \
+                      % (rcn_LsL1_t, rcn_LsL1, rpn_LsL1_t, rpn_LsL1))
 
                 print("[epoch %2d][iter %4d/%4d] loss: %.4f, lr: %.2e" \
                       % (epoch, step, iters_per_epoch, loss_temp, lr))
@@ -375,6 +378,7 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
                       % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box))
                 print("\t\t\trcn_Lhard: %.4f, rcn_LsL1: %.4f, rpn_Lhard: %.4f, rpn_LsL1 %.4f" \
                       % (rcn_Lhard, rcn_LsL1, rpn_Lhard, rpn_LsL1))
+                
                 print("\t\t\tloss_hint: %.4f" \
                       % (loss_hint.item()))
                 

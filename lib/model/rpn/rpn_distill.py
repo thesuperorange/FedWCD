@@ -65,7 +65,11 @@ class _RPN(nn.Module):
         # return feature map after convrelu layer
         rpn_conv1 = F.relu(self.RPN_Conv(base_feat), inplace=True)
         # get rpn classification score
+        
         rpn_cls_score = self.RPN_cls_score(rpn_conv1)
+        
+        #print("rpn_cls_score size:{}".format(rpn_cls_score.size()))  #[batch,24,37,46]
+        #print(rpn_cls_score )
         rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
         
         rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, 1)
@@ -73,6 +77,10 @@ class _RPN(nn.Module):
         
         # get rpn offsets to the anchor boxes
         rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)
+        
+        #print("rpn_bbox_pred size:{}".format(rpn_bbox_pred.size()))  #[batch,48,37,46]
+        #print(rpn_bbox_pred )
+        
         
         # distill before softmax Ps=softmax(Zs/T)
         rpn_cls_prob_reshape_DISTLL = F.softmax(rpn_cls_score_reshape/self.T, 1)
@@ -97,17 +105,25 @@ class _RPN(nn.Module):
         # generating training labels and build the rpn loss
         if self.training:
             assert gt_boxes is not None
+            #print(gt_boxes)
+            #print("gt_boxes size:{}".format(gt_boxes.size()))  #[batch,20,5]
 
             rpn_data = self.RPN_anchor_target((rpn_cls_score.data, gt_boxes, im_info, num_boxes))
+            #print("rpn_data[0] size:{}".format(rpn_data[0].size())) #[24, 1, 444, 46]
 
             # compute classification loss
             rpn_cls_score = rpn_cls_score_reshape.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, 2)
+            
+            
+            
             rpn_label = rpn_data[0].view(batch_size, -1)
-
+            #print("rpn_label size:{}".format(rpn_label.size())) #[batch, 20424]
+            
             rpn_keep = Variable(rpn_label.view(-1).ne(-1).nonzero().view(-1))
             rpn_cls_score = torch.index_select(rpn_cls_score.view(-1,2), 0, rpn_keep)
             rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
             rpn_label = Variable(rpn_label.long())
+            #print("rpn_label size:{}".format(rpn_label.size())) #6144 = batch*256
             
             # KD RPN Lhard(Ps,y), Ps=softmax(Zs/T)
             # why no softmax? don't need to divide by T?
@@ -124,5 +140,11 @@ class _RPN(nn.Module):
 
             self.rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
                                                             rpn_bbox_outside_weights, sigma=3, dim=[1,2,3])
+            #print("RPN Rs:")  [24,48,37,46]
+            #print(rpn_bbox_pred.size())
+            #print("RPN yreg:") [24,48,37,46]
+            #print(rpn_bbox_targets.size())
+            #print('[bounded_regression_loss] Rs v.s. gt: %.4f' % (F.mse_loss(rpn_bbox_pred, rpn_bbox_targets).item()))
+
 
         return rois, self.rpn_loss_cls, self.rpn_loss_box, rpn_cls_prob_DISTLL, rpn_bbox_pred, rpn_bbox_targets
