@@ -147,4 +147,4 @@ class _RPN(nn.Module):
             #print('[bounded_regression_loss] Rs v.s. gt: %.4f' % (F.mse_loss(rpn_bbox_pred, rpn_bbox_targets).item()))
 
 
-        return rois, self.rpn_loss_cls, self.rpn_loss_box, rpn_cls_prob_DISTLL, rpn_bbox_pred, rpn_bbox_targets
+        return rois, self.rpn_loss_cls, self.rpn_loss_box, rpn_cls_prob_DISTLL, rpn_bbox_pred, rpn_bbox_targets, rpn_data[-1]
