@@ -128,7 +128,16 @@ def parse_args():
                         help='input teacher model file path')
     
     parser.add_argument('--KD_mode', dest='KD_mode',
-                    help='set KD params, default/off/softonly/hintonly') 
+                    help='set KD params, default/off/softonly/hintonly/mask') 
+
+    
+    # params for KDv2
+    parser.add_argument('--ws', dest='warm_step',
+                    help='warm up the training',
+                    default=400, type=int)
+    parser.add_argument('--ilw', dest='imitation_loss_weigth',
+                    help='imitation loss weight',
+                    default=0.01, type=float)
     
     # weighted FedAvg
 #     parser.add_argument('--wk', dest='wkFedAvg',
@@ -287,7 +296,9 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
     for epoch in range(args.start_epoch, args.max_epochs + 1):
         # setting to train mode
         fasterRCNN_s.train()
+        #fasterRCNN_t.train()
         loss_temp = 0
+        loss_sup_temp = 0
         start = time.time()
 
         if epoch % (args.lr_decay_step + 1) == 0:
@@ -316,11 +327,38 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
             
             # student net
             rois, rcn_Ps, rcn_Rs, rpn_Lhard, rpn_LsL1, \
-            rcn_Lhard, rcn_LsL1, rois_label, rpn_Ps, rpn_Rs, fmap_s, rcn_gt, rpn_gt = fasterRCNN_s(im_data, im_info, gt_boxes, num_boxes)
+            rcn_Lhard, rcn_LsL1, rois_label, rpn_Ps, rpn_Rs, fmap_s, rcn_gt, rpn_gt, mask_batch = fasterRCNN_s(im_data, im_info, gt_boxes, num_boxes)
             # teacher net
-            _, rcn_Pt, rcn_Rt, rpn_Lhard_t, rpn_LsL1_t, rcn_Lhard_t, rcn_LsL1_t, _, rpn_Pt, rpn_Rt, fmap_t, _,_ = fasterRCNN_t(im_data, im_info, gt_boxes, num_boxes)
+            _, rcn_Pt, rcn_Rt, rpn_Lhard_t, rpn_LsL1_t, rcn_Lhard_t, rcn_LsL1_t, _, rpn_Pt, rpn_Rt, fmap_t, rcn_gt_t,rpn_gt_t, _ = fasterRCNN_t(im_data, im_info, gt_boxes, num_boxes)
+            
+#             print('[bounded_regression_loss] **RPN** Rs v.s. gt: %.4f' % (F.smooth_l1_loss(rpn_Rs, rpn_gt).item()))
+#             #print('[bounded_regression_loss] **RPN** Rt v.s. gt_s: %.4f' % (F.mse_loss(rpn_Rt, rpn_gt).item()))
+#             print('[bounded_regression_loss] **RPN** Rt v.s. gt_t: %.4f' % (F.smooth_l1_loss(rpn_Rt, rpn_gt_t).item()))
+            
+#             print('[bounded_regression_loss] **RCN** Rs v.s. gt: %.4f' % (F.smooth_l1_loss(rcn_Rs, rcn_gt).item()))
+#             #print('[bounded_regression_loss] **RCN** Rt v.s. gt_s: %.4f' % (F.mse_loss(rcn_Rt, rcn_gt).item()))
+#             print('[bounded_regression_loss] **RCN** Rt v.s. gt_t: %.4f' % (F.smooth_l1_loss(rcn_Rt, rcn_gt_t).item()))
 
+            
+            #----------------------KD v2------------------
+            
+            mask_list = []
+            for mask in mask_batch:
+                mask = (mask > 0).float().unsqueeze(0)
+                mask_list.append(mask)
+            mask_batch = torch.stack(mask_list, dim=0)
+            norms = mask_batch.sum() * 2
+            
+            #stu_feature_adap = fasterRCNN.stu_feature_adap(stu_feature)  # comment out because we use the same backbone for both t&s
+            sup_loss = (torch.pow(fmap_t - fmap_s, 2) * mask_batch).sum() / norms
+            sup_loss = sup_loss * args.imitation_loss_weigth
 
+            
+
+                            
+            
+#------------------------old KD v1           
+            
             # Lhint=|V-Z|^2
             loss_hint = F.mse_loss(fmap_s, fmap_t)
             
@@ -328,18 +366,31 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
             if step % args.disp_interval == 0:
                 print("RPN")
             rpn_loss_cls, rpn_loss_reg = \
-                KD_utils.KD_getloss(rpn_Ps, rpn_Pt, rpn_Rs, rpn_Rt, rpn_gt, rpn_LsL1, rpn_Lhard,step, 1.0, 1.5, u, v)
+                KD_utils.KD_getloss(rpn_Ps, rpn_Pt, rpn_Rs, rpn_Rt, rpn_gt,rpn_gt_t, rpn_LsL1, rpn_Lhard,step, 1.0, 1.5, u, v)
             
              ### RCN part
             if step % args.disp_interval == 0:
                 print("RCN")
             rcn_loss_cls, rcn_loss_reg = \
-                KD_utils.KD_getloss(rcn_Ps, rcn_Pt, rcn_Rs, rcn_Rt, rcn_gt, rcn_LsL1, rcn_Lhard,step, 1.0, 1.5, u, v)
+                KD_utils.KD_getloss(rcn_Ps, rcn_Pt, rcn_Rs, rcn_Rt, rcn_gt,rcn_gt_t, rcn_LsL1, rcn_Lhard,step, 1.0, 1.5, u, v)
+
             
+            if args.KD_mode == 'mask':
             
-            loss = gamma * loss_hint + rpn_loss_cls.mean() + rcn_loss_cls.mean() + lambda_var*( rpn_loss_reg.mean() + rcn_loss_reg.mean())
+                loss = rpn_Lhard.mean() + rpn_LsL1.mean() \
+                       + rcn_Lhard.mean() + rcn_LsL1.mean()
+                #loss_temp += loss.data[0]
+                loss_temp += loss.item()
+
+                if (step < args.warm_step and epoch == 1) :#or args.turn_off_imitation:
+                    sup_loss = sup_loss * 0
+                loss += sup_loss
+                loss_sup_temp += sup_loss            
+            else:
             
-            loss_temp += loss.item()
+                loss = gamma * loss_hint + rpn_loss_cls.mean() + rcn_loss_cls.mean() + lambda_var*( rpn_loss_reg.mean() + rcn_loss_reg.mean())
+                loss_temp += loss.item()
+            
             #      print('loss={}'.format(loss))
             # backward
             optimizer.zero_grad()
@@ -352,15 +403,27 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
                 end = time.time()
                 if step > 0:
                     loss_temp /= (args.disp_interval + 1)
+                    loss_sup_temp /= (args.disp_interval + 1)
 
                 if args.mGPUs:
+                    loss_rpn_Lhard = rpn_Lhard.mean().item()
+                    loss_rpn_LsL1 = rpn_LsL1.mean().item()
+                    loss_rcn_Lhard = rcn_Lhard.mean().item()
+                    loss_rcn_LsL1 = rcn_LsL1.mean().item()
+                    
                     loss_rpn_cls = rpn_loss_cls.mean().item()
                     loss_rpn_box = rpn_loss_reg.mean().item()
                     loss_rcnn_cls = rcn_loss_cls.mean().item()
                     loss_rcnn_box = rcn_loss_reg.mean().item()
+                    
                     fg_cnt = torch.sum(rois_label.data.ne(0))
                     bg_cnt = rois_label.data.numel() - fg_cnt
                 else:
+                    loss_rpn_Lhard = rpn_Lhard.item()
+                    loss_rpn_LsL1 = rpn_LsL1.item()
+                    loss_rcn_Lhard = rcn_Lhard.item()
+                    loss_rcn_LsL1 = rcn_LsL1.item()
+                    
                     loss_rpn_cls = rpn_loss_cls.item()
                     loss_rpn_box = rpn_loss_reg.item()
                     loss_rcnn_cls = rcn_loss_cls.item()
@@ -371,13 +434,13 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
                 print("[t]rcn_LsL1_t: %.4f, [s]rcn_LsL1: %.4f, [t]rpn_LsL1_t: %.4f, [s]rpn_LsL1 %.4f" \
                       % (rcn_LsL1_t, rcn_LsL1, rpn_LsL1_t, rpn_LsL1))
 
-                print("[epoch %2d][iter %4d/%4d] loss: %.4f, lr: %.2e" \
-                      % (epoch, step, iters_per_epoch, loss_temp, lr))
+                print("[epoch %2d][iter %4d/%4d] loss: %.4f, loss_sup: %.4f, lr: %.2e" \
+                      % (epoch, step, iters_per_epoch, loss_temp, loss_sup_temp, lr))
                 print("\t\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end - start))
                 print("\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f" \
                       % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box))
                 print("\t\t\trcn_Lhard: %.4f, rcn_LsL1: %.4f, rpn_Lhard: %.4f, rpn_LsL1 %.4f" \
-                      % (rcn_Lhard, rcn_LsL1, rpn_Lhard, rpn_LsL1))
+                      % (loss_rcn_Lhard, loss_rcn_LsL1, loss_rpn_Lhard, loss_rpn_LsL1))
                 
                 print("\t\t\tloss_hint: %.4f" \
                       % (loss_hint.item()))
@@ -463,13 +526,15 @@ if __name__ == '__main__':
         KD_params ={'u':1, 'v':0, 'gamma':0, 'lambda_var':1}  # lambda: don't care
     elif KD_mode=='softonly':
         KD_params ={'u':0, 'v':0, 'gamma':1, 'lambda_var':0}  # v: don't care because lambda already set to 0
-    elif KD_mode == 'default':
-        KD_params ={'u':0.5, 'v':0.5, 'gamma':0.5, 'lambda_var':1}
+    
     elif KD_mode == 'hintonly':
         KD_params ={'u':1, 'v':0, 'gamma':0.5, 'lambda_var':1}
+    
     else:
-        print("wrong KD_mode")
-        exit() 
+        #default / mask (didn't use any of them)
+        KD_params ={'u':0.5, 'v':0.5, 'gamma':0.5, 'lambda_var':1}
+        #print("wrong KD_mode")
+        #exit() 
  
 
     if torch.cuda.is_available() and not args.cuda:
@@ -495,6 +560,9 @@ if __name__ == '__main__':
     fasterRCNN_teacher = FedUtils.load_model_KD(imdb_classes, teacher_model_path, args, cfg)
     fasterRCNN_student = FedUtils.initial_network_KD(imdb_classes, args)
     
+    
+
+    
     # freeze all VGG layer
     if args.freeze == True:
         if args.mGPUs:
@@ -504,6 +572,7 @@ if __name__ == '__main__':
                 
             
     optimizer = FedUtils.getOptimizer(fasterRCNN_student,args,cfg)
+  
         
     train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_student, fasterRCNN_teacher, optimizer, KD_params)
         
