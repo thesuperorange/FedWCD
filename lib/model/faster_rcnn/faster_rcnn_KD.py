@@ -52,7 +52,7 @@ class _fasterRCNNKD(nn.Module):
         base_feat = self.RCNN_base(im_data)
 
         # feed base feature map tp RPN to obtain rois
-        rois, rpn_loss_cls, rpn_loss_bbox, rpn_Ps, rpn_Rs, rpn_gt = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
+        rois, rpn_loss_cls, rpn_loss_bbox, rpn_Ps, rpn_Rs, rpn_gt , mask_batch= self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
@@ -111,7 +111,8 @@ class _fasterRCNNKD(nn.Module):
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
-
+            MSE_loss = F.mse_loss(bbox_pred, rois_target)
+            #print("RCN MSE_loss={}".format(MSE_loss))
 
         
 #         rpn_b_test = F.mse_loss(rpn_Rs, rpn_gt)
@@ -130,7 +131,7 @@ class _fasterRCNNKD(nn.Module):
         
         
 
-        return rois, cls_prob_DISTILL, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label, rpn_Ps, rpn_Rs, base_feat, rois_target,rpn_gt
+        return rois, cls_prob_DISTILL, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label, rpn_Ps, rpn_Rs, base_feat, rois_target,rpn_gt, mask_batch
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
