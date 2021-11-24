@@ -350,8 +350,8 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
             norms = mask_batch.sum() * 2
             
             #stu_feature_adap = fasterRCNN.stu_feature_adap(stu_feature)  # comment out because we use the same backbone for both t&s
-            sup_loss = (torch.pow(fmap_t - fmap_s, 2) * mask_batch).sum() / norms
-            sup_loss = sup_loss * args.imitation_loss_weigth
+#             sup_loss = (torch.pow(fmap_t - fmap_s, 2) * mask_batch).sum() / norms
+#             sup_loss = sup_loss * args.imitation_loss_weigth
 
             
 
@@ -366,13 +366,13 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN_s, fasterRCNN_t,
             if step % args.disp_interval == 0:
                 print("RPN")
             rpn_loss_cls, rpn_loss_reg = \
-                KD_utils.KD_getloss(rpn_Ps, rpn_Pt, rpn_Rs, rpn_Rt, rpn_gt,rpn_gt_t, rpn_LsL1, rpn_Lhard,step, 1.0, 1.5, u, v)
+                KD_utils.KD_getloss(rpn_Ps, rpn_Pt, rpn_Rs, rpn_Rt, rpn_gt,rpn_gt_t, rpn_LsL1, rpn_Lhard,step,args.mGPUs, 1.0, 1.5, u, v)
             
              ### RCN part
             if step % args.disp_interval == 0:
                 print("RCN")
             rcn_loss_cls, rcn_loss_reg = \
-                KD_utils.KD_getloss(rcn_Ps, rcn_Pt, rcn_Rs, rcn_Rt, rcn_gt,rcn_gt_t, rcn_LsL1, rcn_Lhard,step, 1.0, 1.5, u, v)
+                KD_utils.KD_getloss(rcn_Ps, rcn_Pt, rcn_Rs, rcn_Rt, rcn_gt,rcn_gt_t, rcn_LsL1, rcn_Lhard,step, args.mGPUs,1.0, 1.5, u, v)
 
             
             if args.KD_mode == 'mask':
