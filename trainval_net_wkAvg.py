@@ -20,6 +20,9 @@ import torch
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.optim as optim
+from datasets.factory import get_imdb
+
+
 
 import torchvision.transforms as transforms
 from torch.utils.data.sampler import Sampler
@@ -472,14 +475,16 @@ if __name__ == '__main__':
         
         
     # remove target scene from imdb list
+    
     imdb_list.remove(args.target_scene)
     print(imdb_list)    
     parties = len(imdb_list)
     
         
-    ## get imdb classes
-    imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
-    imdb.competition_mode(on=True)
+    ## get imdb name
+    #imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
+    #imdb.competition_mode(on=True)
+    imdb = get_imdb(args.imdb_name)
     imdb_classes=np.asarray(imdb.classes)   
 
     
