@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-def KD_getloss(Ps, Pt, Rs, Rt, yreg, yreg_t, LsL1, Lhard, iteration, pos_w, neg_w, u=0.5, v=0.5, m=0.):
+def KD_getloss(Ps, Pt, Rs, Rt, yreg, yreg_t, LsL1, Lhard, iteration, pos_w, neg_w, mGPU, u=0.5, v=0.5, m=0.):
 
     
     
@@ -21,15 +21,27 @@ def KD_getloss(Ps, Pt, Rs, Rt, yreg, yreg_t, LsL1, Lhard, iteration, pos_w, neg_
     loss_reg = LsL1+ v*loss_b
     
     if iteration % 100==0:
-        print('[KD_tuils] LsL1: %.4f' % (LsL1.item()))
-        print('[KD_tuils] Lhard: %.4f'% (Lhard.item()))
-        
-        print('[KD_tuils] loss_soft: %.4f' % (loss_soft_rpn.item()))
-        #print('[KD_tuils] loss_soft F.KL: %.4f' % (kl.item()))
-        
-        print('[bounded_regression_loss] Rs v.s. gt: %.4f' % (F.mse_loss(Rs, yreg).item()))
-        print('[bounded_regression_loss] Rt v.s. gt: %.4f' % (F.mse_loss(Rt, yreg_t).item()))
-        print('[KD_tuils] loss_b: %.4f'%(loss_b.item()))
+        if mGPU:
+            print('[KD_tuils] LsL1: %.4f' % (LsL1.mean().item()))
+            print('[KD_tuils] Lhard: %.4f'% (Lhard.mean().item()))
+
+            print('[KD_tuils] loss_soft: %.4f' % (loss_soft_rpn.mean().item()))
+            #print('[KD_tuils] loss_soft F.KL: %.4f' % (kl.item()))
+
+            print('[bounded_regression_loss] Rs v.s. gt: %.4f' % (F.mse_loss(Rs, yreg).mean().item()))
+            print('[bounded_regression_loss] Rt v.s. gt: %.4f' % (F.mse_loss(Rt, yreg_t).mean().item()))
+            print('[KD_tuils] loss_b: %.4f'%(loss_b.item()))            
+            
+        else:
+            print('[KD_tuils] LsL1: %.4f' % (LsL1.mean().item()))
+            print('[KD_tuils] Lhard: %.4f'% (Lhard.mean().item()))
+
+            print('[KD_tuils] loss_soft: %.4f' % (loss_soft_rpn.mean().item()))
+            #print('[KD_tuils] loss_soft F.KL: %.4f' % (kl.item()))
+
+            print('[bounded_regression_loss] Rs v.s. gt: %.4f' % (F.mse_loss(Rs, yreg).item()))
+            print('[bounded_regression_loss] Rt v.s. gt: %.4f' % (F.mse_loss(Rt, yreg_t).item()))
+            print('[KD_tuils] loss_b: %.4f'%(loss_b.item()))
     
     return loss_cls, loss_reg
 

@@ -131,7 +131,7 @@ class _RPN(nn.Module):
             
             fg_cnt = torch.sum(rpn_label.data.ne(0))
 
-            rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:-1]
+            rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
 
             # compute bbox regression loss
             rpn_bbox_inside_weights = Variable(rpn_bbox_inside_weights)

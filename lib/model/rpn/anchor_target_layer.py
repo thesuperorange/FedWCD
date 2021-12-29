@@ -99,24 +99,25 @@ class _AnchorTargetLayer(nn.Module):
         
         
         # add mask_batch for KD (v20211119)
-        IOU_map = bbox_overlaps_batch(all_anchors, gt_boxes).view(
-                                 batch_size, height, width, A, gt_boxes.shape[1])
+#         IOU_map = bbox_overlaps_batch(all_anchors, gt_boxes).view(
+#                                  batch_size, height, width, A, gt_boxes.shape[1])
 
-        mask_batch = []
-        for i in range(batch_size):
-                max_iou, _ = torch.max(IOU_map[i].view(height* width* A,
-                                                       gt_boxes.shape[1]), dim = 0)
-                mask_per_im = torch.zeros([height, width], dtype=torch.int64).cuda()
-                for k in range(gt_boxes.shape[1]):
-                    if torch.sum(gt_boxes[i][k]) == 0.:
-                        break
-                    max_iou_per_gt = max_iou[k]*0.5
-                    mask_per_gt = torch.sum(IOU_map[i][:,:,:,k]>max_iou_per_gt,
-                                                                       dim = 2)
-                    mask_per_im +=mask_per_gt
-                mask_batch.append(mask_per_im)
-        # for multi gpu training gather
-        # mask_batch = torch.stack(mask_batch)
+#         mask_batch = []
+#         for i in range(batch_size):
+#                 max_iou, _ = torch.max(IOU_map[i].view(height* width* A,
+#                                                        gt_boxes.shape[1]), dim = 0)
+#                 mask_per_im = torch.zeros([height, width], dtype=torch.int64).cuda()
+#                 for k in range(gt_boxes.shape[1]):
+#                     if torch.sum(gt_boxes[i][k]) == 0.:
+#                         break
+#                     max_iou_per_gt = max_iou[k]*0.5
+#                     mask_per_gt = torch.sum(IOU_map[i][:,:,:,k]>max_iou_per_gt,
+#                                                                        dim = 2)
+#                     mask_per_im +=mask_per_gt
+#                 mask_batch.append(mask_per_im)
+#         # for multi gpu training gather
+#         # mask_batch = torch.stack(mask_batch)
+        ##--------------------------------
         
 
         max_overlaps, argmax_overlaps = torch.max(overlaps, 2)
@@ -214,7 +215,7 @@ class _AnchorTargetLayer(nn.Module):
         
         
         # add for mask
-        outputs.append(mask_batch)
+        #outputs.append(mask_batch)
 
         return outputs
 

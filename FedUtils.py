@@ -1,5 +1,5 @@
 from model.faster_rcnn.vgg16_KD import vgg16 as vgg16KD
-from model.faster_rcnn.vgg16_KD import vgg16
+from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
 import torch.nn as nn
 import torch

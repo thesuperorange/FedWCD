@@ -40,14 +40,14 @@ import pickle
 
 import FedUtils
 
-imdb_list = [  'KAIST_road','KAIST_downtown']  #'KAIST_campus',
 
 data_cache_path = 'data/cache'
-imdb_classes =  ('__background__',  # always index 0
-                          'person',
-                          'people','cyclist'
-                         )
-parties = len(imdb_list)
+# imdb_classes =  ('__background__',  # always index 0
+#                           'person',
+#                           'people','cyclist'
+#                          )
+
+
 
 def parse_args():
     """
@@ -118,6 +118,15 @@ def parse_args():
                         help='using within class as weighted to average model weight',
                         action='store_true')
     
+    # wcd test data, required only for FedWCD 
+    parser.add_argument('--testdata_pkl', dest='testimg_pickle_path',
+                    help='FedWCD test data (pkl file)')
+    
+    
+    parser.add_argument('--target_scene', dest='target_scene',
+                    help='target scene, will be excluded during training process')
+    
+    
     parser.add_argument('--FedPer', dest='FedPer',
                         help='only average base layer',
                         action='store_true')
@@ -128,6 +137,8 @@ def parse_args():
                         action='store_true')
     parser.add_argument('--resume_model_name', dest='resume_model_name',
                         help='resume model name')
+     
+
     
 #     parser.add_argument('--checkround', dest='checkround',
 #                         help='checkround to load model',
@@ -138,6 +149,11 @@ def parse_args():
 #     parser.add_argument('--checkpoint', dest='checkpoint',
 #                         help='checkpoint to load model',
 #                        default=0, type=int)
+
+    parser.add_argument('--save_local', dest='save_local_model',
+                        help='save local model or not',
+                        action='store_true')
+    
     parser.add_argument('--round', dest='round',
                     help='total rounds',
                     default=10, type=int)
@@ -150,7 +166,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def load_client_dataset(imdb_list):
+def load_client_dataset(imdb_list,imdb_classes):
     dataloader_list = []
     iter_epochs_list = []
     for imdb_name in imdb_list:
@@ -338,16 +354,17 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_
                 loss_temp = 0
                 start = time.time()
         #if epoch == args.max_epochs + 1 :
-        save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}_{}.pth'.format(imdb_name,num_round, epoch, step))
-        save_checkpoint({
-          'round': num_round,
-          'epoch': epoch ,
-          'model': fasterRCNN.module.state_dict() if args.mGPUs else fasterRCNN.state_dict(),
-          'optimizer': optimizer.state_dict(),
-          'pooling_mode': cfg.POOLING_MODE,
-          'class_agnostic': args.class_agnostic,
-        }, save_name)
-        print('save model: {}'.format(save_name))
+        if args.save_local_model:
+            save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}_{}.pth'.format(imdb_name,num_round, epoch, step))
+            save_checkpoint({
+              'round': num_round,
+              'epoch': epoch ,
+              'model': fasterRCNN.module.state_dict() if args.mGPUs else fasterRCNN.state_dict(),
+              'optimizer': optimizer.state_dict(),
+              'pooling_mode': cfg.POOLING_MODE,
+              'class_agnostic': args.class_agnostic,
+            }, save_name)
+            print('save model: {}'.format(save_name))
     return fasterRCNN    
         
 # def avgWeight(model_list,ratio_list):
@@ -433,6 +450,8 @@ def getWeight(test_images,model_list, args):
 if __name__ == '__main__':
 
     args = parse_args()
+    
+    
 
     print('Called with args:')
     print(args)
@@ -440,14 +459,36 @@ if __name__ == '__main__':
     if torch.cuda.is_available() and not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
+    if args.dataset=='KAIST':
+        args.imdb_name = "KAIST_train"
+        args.imdbval_name = "KAIST_test"
+        imdb_list = [  'KAIST_road','KAIST_downtown','KAIST_campus']
+    elif args.dataset=='MI3':
+        args.imdb_name = "MI3_train"
+        args.imdbval_name = "MI3_train"
+        imdb_list = ['MI3_train_Bus','MI3_train_Staircase','MI3_train_Room','MI3_train_Doorway','MI3_train_Pathway']        
+    else:
+        raise Exception('this dataset is not supported')
+        
+        
+    # remove target scene from imdb list
+    imdb_list.remove(args.target_scene)
+    print(imdb_list)    
+    parties = len(imdb_list)
+    
+        
+    ## get imdb classes
+    imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
+    imdb.competition_mode(on=True)
+    imdb_classes=np.asarray(imdb.classes)   
 
-
+    
     output_dir = args.save_dir + "/" + args.net + "/" + args.dataset + "/" + args.save_sub_dir
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
     
-    dataloader_list,iter_epochs_list = load_client_dataset(imdb_list)
+    dataloader_list,iter_epochs_list = load_client_dataset(imdb_list,imdb_classes)
     #dataloader = dataloader_list[0]
     print('# worker' + str(args.num_workers))
     # initilize the tensor holder here.
@@ -504,7 +545,7 @@ if __name__ == '__main__':
         
         if args.wkFedAvg:
             # read test image pickle file
-            testimg_pickle_path = 'testimg2252.pkl'
+            testimg_pickle_path = args.testimg_pickle_path #'testimg2252.pkl'
 
             with open(testimg_pickle_path, 'rb') as handle:
                 test_images = pickle.load(handle)
@@ -538,7 +579,7 @@ if __name__ == '__main__':
         
         
 
-        save_name = os.path.join(output_dir, 'faster_rcnn_KAIST_AVG_{}.pth'.format(i))
+        save_name = os.path.join(output_dir, 'faster_rcnn_'+args.dataset+'_AVG_{}.pth'.format(i))
         save_checkpoint({
           #'session': 1,
           'round': i,
