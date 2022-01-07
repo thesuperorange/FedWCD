@@ -23,10 +23,16 @@ python demoKAIST2.py  --dataset KAIST --net vgg16 --model_name faster_rcnn_KAIST
 1. KAIST standard evaluation metrics (AP & MR)
 
   https://github.com/thesuperorange/task-conditioned
+  
+  ```
+  python faster_eval.py
+  ```
 
 2. AP only
 
   https://github.com/thesuperorange/deepMI3/tree/master/model_evaluation
 
-
+```
+ python pascalvoc.py -g <GT folder> -d <detection folder>
+```
 
