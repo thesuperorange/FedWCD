@@ -8,15 +8,20 @@ scene_list = ['Staircase','Room','Bus','Doorway','Pathway']
 DATASET='MI3'
 mode='FedWCD' #'FedAvg'
 
+test_data = 'all'
+
 
 for i,scene in enumerate(scene_list):
     
-    model_sub_dir=mode+'_no'+scene
+    model_sub_dir=mode+'_no'+scene+'_'+test_data
     target_scene = 'MI3_train_'+scene
     
 
     if mode=='FedWCD':
-        testdata_pkl = 'data/pickle/MI3_test_'+scene+'.pkl'
+        if test_data=='all':
+            testdata_pkl = 'data/pickle/MI3_test_3325.pkl'
+        else:
+            testdata_pkl = 'data/pickle/MI3_test_'+scene+'.pkl'
         command = 'python trainval_net_wkAvg.py --dataset {} --net {} --bs 24 --nw 2 --lr 0.01 --cuda --epochs 3 --round 10 --save_sub_dir {} --target_scene {} --wk --testdata_pkl {} --mGPU'.format(DATASET, NET,model_sub_dir,target_scene,testdata_pkl)
     elif mode=='FedAvg':
         command = 'python trainval_net_wkAvg.py --dataset {} --net {} --bs 24 --nw 2 --lr 0.01 --cuda --epochs 3 --round 10 --save_sub_dir {} --target_scene {} --mGPU'.format(DATASET, NET,model_sub_dir,target_scene)

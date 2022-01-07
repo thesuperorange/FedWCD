@@ -20,6 +20,9 @@ import torch
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.optim as optim
+from datasets.factory import get_imdb
+
+
 
 import torchvision.transforms as transforms
 from torch.utils.data.sampler import Sampler
@@ -30,8 +33,7 @@ from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
 from model.utils.net_utils import weights_normal_init, save_net, load_net, \
     adjust_learning_rate, save_checkpoint, clip_gradient
 
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
+
 
 from frcnn_helper import *
 from scipy.special import softmax
@@ -40,17 +42,14 @@ import pickle
 
 import FedUtils
 
-# imdb_list = [  'KAIST_road','KAIST_downtown']  #'KAIST_campus',
-imdb_list = ['MI3_train_Bus','MI3_train_Pathway','MI3_train_Room','MI3_train_Staircase']
+
 data_cache_path = 'data/cache'
 # imdb_classes =  ('__background__',  # always index 0
 #                           'person',
 #                           'people','cyclist'
 #                          )
 
-imdb_classes = ('__background__',  # always index 0
-                  'person')
-parties = len(imdb_list)
+
 
 def parse_args():
     """
@@ -121,19 +120,27 @@ def parse_args():
                         help='using within class as weighted to average model weight',
                         action='store_true')
     
+    # wcd test data, required only for FedWCD 
+    parser.add_argument('--testdata_pkl', dest='testimg_pickle_path',
+                    help='FedWCD test data (pkl file)')
+    
+    
+    parser.add_argument('--target_scene', dest='target_scene',
+                    help='target scene, will be excluded during training process')
+    
+    
     parser.add_argument('--FedPer', dest='FedPer',
                         help='only average base layer',
                         action='store_true')
 
-    parser.add_argument('--save_local', dest='save_local_model',
-                    help='save local model or not',
-                    action='store_true')
     # resume trained model
     parser.add_argument('--r', dest='resume',
                         help='resume checkpoint or not',
                         action='store_true')
     parser.add_argument('--resume_model_name', dest='resume_model_name',
                         help='resume model name')
+     
+
     
 #     parser.add_argument('--checkround', dest='checkround',
 #                         help='checkround to load model',
@@ -144,6 +151,11 @@ def parse_args():
 #     parser.add_argument('--checkpoint', dest='checkpoint',
 #                         help='checkpoint to load model',
 #                        default=0, type=int)
+
+    parser.add_argument('--save_local', dest='save_local_model',
+                        help='save local model or not',
+                        action='store_true')
+    
     parser.add_argument('--round', dest='round',
                     help='total rounds',
                     default=10, type=int)
@@ -156,33 +168,28 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def load_client_dataset(imdb_list):
-    dataloader_list = []
-    iter_epochs_list = []
-    for imdb_name in imdb_list:
-        pkl_file = os.path.join(data_cache_path, imdb_name + '_gt_roidb.pkl')
 
-        with open(pkl_file, 'rb') as f:
-            roidb = pickle.load(f)
+def load_client_dataset_single(imdb_name, imdb_classes):
+    
+    pkl_file = os.path.join(data_cache_path, imdb_name + '_gt_roidb.pkl')
 
-        roidb = filter_roidb(roidb)
+    with open(pkl_file, 'rb') as f:
+        roidb = pickle.load(f)
 
-        ratio_list, ratio_index = rank_roidb_ratio(roidb)
+    roidb = filter_roidb(roidb)
+    train_size = len(roidb)
+   
+    ratio_list, ratio_index = rank_roidb_ratio(roidb)
+   
 
-        train_size = len(roidb)
-        print(train_size)
-        iters_per_epoch = int(train_size / args.batch_size)
-        print('iters_per_epoch: ' + str(iters_per_epoch))
-        iter_epochs_list.append(iters_per_epoch)
-        sampler_batch = sampler(train_size, args.batch_size)
+    sampler_batch = sampler(train_size, args.batch_size)
 
-        dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, imdb_classes, training=True)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
-                                                 sampler=sampler_batch, num_workers=args.num_workers)
-        dataloader_list.append(dataloader)
-    return dataloader_list, iter_epochs_list
+    dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, imdb_classes, training=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
+                                             sampler=sampler_batch, num_workers=args.num_workers)
+    
 
-
+    return dataloader, train_size
 class sampler(Sampler):
     def __init__(self, train_size, batch_size):
         self.num_data = train_size
@@ -254,11 +261,19 @@ class sampler(Sampler):
 #     return optimizer
 
 
-def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_round):     
+def train(args,s_dataloader,t_dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer):     
     im_data = torch.FloatTensor(1)
     im_info = torch.FloatTensor(1)
     num_boxes = torch.LongTensor(1)
     gt_boxes = torch.FloatTensor(1)
+    need_backprop = torch.FloatTensor(1)
+    
+    tgt_im_data = torch.FloatTensor(1)
+    tgt_im_info = torch.FloatTensor(1)
+    tgt_num_boxes = torch.LongTensor(1)
+    tgt_gt_boxes = torch.FloatTensor(1)
+    tgt_need_backprop = torch.FloatTensor(1)
+
 
     # ship to cuda
     if args.cuda:
@@ -266,12 +281,25 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_
         im_info = im_info.cuda()
         num_boxes = num_boxes.cuda()
         gt_boxes = gt_boxes.cuda()
-
+        need_backprop = need_backprop.cuda()
+        
+        tgt_im_data = tgt_im_data.cuda()
+        tgt_im_info = tgt_im_info.cuda()
+        tgt_num_boxes = tgt_num_boxes.cuda()
+        tgt_gt_boxes = tgt_gt_boxes.cuda()
+        tgt_need_backprop = tgt_need_backprop.cuda()
     # make variable
     im_data = Variable(im_data)
     im_info = Variable(im_info)
     num_boxes = Variable(num_boxes)
     gt_boxes = Variable(gt_boxes)
+    need_backprop = Variable(need_backprop)
+    
+    tgt_im_data = Variable(tgt_im_data)
+    tgt_im_info = Variable(tgt_im_info)
+    tgt_num_boxes = Variable(tgt_num_boxes)
+    tgt_gt_boxes = Variable(tgt_gt_boxes)
+    tgt_need_backprop = Variable(tgt_need_backprop)
     
     lr = args.lr
 
@@ -287,21 +315,33 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_
             adjust_learning_rate(optimizer, args.lr_decay_gamma)
             lr *= args.lr_decay_gamma
 
-        data_iter = iter(dataloader)
+        data_iter = iter(s_dataloader)
+        
+        tgt_data_iter = iter(t_dataloader)
+        
         for step in range(iters_per_epoch):
             data = next(data_iter)
 
             with torch.no_grad():
                 im_data.resize_(data[0].size()).copy_(data[0])
+                
                 im_info.resize_(data[1].size()).copy_(data[1])
                 gt_boxes.resize_(data[2].size()).copy_(data[2])
                 num_boxes.resize_(data[3].size()).copy_(data[3])
 
-            fasterRCNN.zero_grad()
+#             fasterRCNN.zero_grad()
+#             rois, cls_prob, bbox_pred, \
+#             rpn_loss_cls, rpn_loss_box, \
+#             RCNN_loss_cls, RCNN_loss_bbox, \
+#             rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+            
             rois, cls_prob, bbox_pred, \
             rpn_loss_cls, rpn_loss_box, \
             RCNN_loss_cls, RCNN_loss_bbox, \
-            rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+            rois_label, DA_img_loss_cls, DA_ins_loss_cls, tgt_DA_img_loss_cls, tgt_DA_ins_loss_cls, \
+            DA_cst_loss, tgt_DA_cst_loss = \
+                fasterRCNN(im_data, im_info, gt_boxes, num_boxes, need_backprop,
+                           tgt_im_data, tgt_im_info, tgt_gt_boxes, tgt_num_boxes, tgt_need_backprop)
 
             loss = rpn_loss_cls.mean() + rpn_loss_box.mean() \
                    + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
@@ -345,7 +385,7 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_
                 start = time.time()
         #if epoch == args.max_epochs + 1 :
         if args.save_local_model:
-            save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}_{}.pth'.format(imdb_name,num_round, epoch, step))
+            save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(imdb_name, epoch, step))
             save_checkpoint({
               'round': num_round,
               'epoch': epoch ,
@@ -440,6 +480,8 @@ def getWeight(test_images,model_list, args):
 if __name__ == '__main__':
 
     args = parse_args()
+    
+    
 
     print('Called with args:')
     print(args)
@@ -447,15 +489,38 @@ if __name__ == '__main__':
     if torch.cuda.is_available() and not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
+    if args.dataset=='KAIST':
+        print('loading KAIST dataset...........')
+        args.s_imdb_name = "KAIST_road"
+        args.t_imdb_name = "KAIST_downtown"
+        args.s_imdbtest_name = "KAIST_test"
+        args.t_imdbtest_name = "KAIST_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+    elif args.dataset=='MI3':
+        args.imdb_name = "MI3_train"
+        args.imdbval_name = "MI3_train"
+        imdb_list = ['MI3_train_Bus','MI3_train_Staircase','MI3_train_Room','MI3_train_Doorway','MI3_train_Pathway']        
+    else:
+        raise Exception('this dataset is not supported')
+        
+        
+    
+        
+    ## get imdb name
+    s_imdb = get_imdb(args.s_imdb_name)
+    imdb_classes = np.asarray(s_imdb.classes)
+    t_imdb = get_imdb(args.s_imdb_name)
 
-
+    
     output_dir = args.save_dir + "/" + args.net + "/" + args.dataset + "/" + args.save_sub_dir
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
+    s_dataloader, s_train_size = load_client_dataset_single(args.s_imdb_name, imdb_classes)
+    t_dataloader, t_train_size = load_client_dataset_single(args.t_imdb_name, imdb_classes)
     
-    dataloader_list,iter_epochs_list = load_client_dataset(imdb_list)
-    #dataloader = dataloader_list[0]
+    iters_per_epoch = min(int(s_train_size / args.batch_size), int(t_train_size / args.batch_size))
+    
     print('# worker' + str(args.num_workers))
     # initilize the tensor holder here.
     
@@ -469,90 +534,33 @@ if __name__ == '__main__':
   
 #     model_list  = train(args, dataloader_list[0], imdb_list[0], iter_epochs_list[0], fasterRCNN, optimizer,1)
 
-    start_round = 0
-    model_list=[None] * parties
+
     if args.resume:
-        for i in range(parties):
-            load_name = os.path.join(output_dir,args.resume_model_name)
-            print("loading checkpoint %s" % (load_name))
-            
-            model_list[i], optimizer, start_round =FedUtils.load_model(imdb_classes, load_name, args, cfg)
-            
-#             model_list[i] = initial_network(args)
-#             checkpoint = torch.load(load_name)
-#             model_list[i].load_state_dict(checkpoint['model'])
-            
-#             optimizer = getOptimizer(model_list[i],args)
-#             optimizer.load_state_dict(checkpoint['optimizer'])
-                        
-            print('start_round:{}'.format(start_round))
-            
+        load_name = os.path.join(output_dir,args.resume_model_name)
+        print("loading checkpoint %s" % (load_name))
+        
+        fasterRCNN, optimizer, args.start_epoch =FedUtils.load_model_DA(imdb_classes, load_name, args, cfg)
+#         checkpoint = torch.load(load_name)
+#         args.session = checkpoint['session']
+#         args.start_epoch = checkpoint['epoch']
+#         fasterRCNN.load_state_dict(checkpoint['model'])
+#         optimizer.load_state_dict(checkpoint['optimizer'])
+        lr = optimizer.param_groups[0]['lr']
+        if 'pooling_mode' in checkpoint.keys():
+            cfg.POOLING_MODE = checkpoint['pooling_mode']
+        print("loaded checkpoint %s" % (load_name))
             
     
     else:
-        for i in range(parties):
-            model_list[i] = FedUtils.initial_network(imdb_classes, args)
-        #optimizer = getOptimizer(model_list[idx],args)
+        fasterRCNN = FedUtils.initial_network_DA(s_imdb.classes, args)
+        optimizer = FedUtils.getOptimizer(fasterRCNN,args,cfg)
 
+    if args.mGPUs:
+        fasterRCNN = nn.DataParallel(fasterRCNN)
 
-    ROUND = args.round
-    #wk_list_prev =[1.9260449632344736,1.6288783338524226,1.623319350129662]
-    
-    for i in range(start_round+1,ROUND+1):
-
-        for idx,dataloader_item in enumerate(dataloader_list):  
-         #   if not args.resume:
-          #      if i==1 :
-           #         model_list[idx] = initial_network(args)
-            optimizer = FedUtils.getOptimizer(model_list[idx],args,cfg)
-
-            model_list [idx] = train(args, dataloader_item,imdb_list[idx],iter_epochs_list[idx], model_list[idx], optimizer,i)
-##--------------------gap statistic----------------------------------    
+    if args.cuda:
+        fasterRCNN.cuda()
         
-        if args.wkFedAvg:
-            # read test image pickle file
-            testimg_pickle_path = 'testimg2252.pkl'
-
-            with open(testimg_pickle_path, 'rb') as handle:
-                test_images = pickle.load(handle)
-            # get within class dispersion        
-
-
-            wk_list_curr = getWeight(test_images,model_list, args)
-            if i==1:
-                wk_diff = wk_list_curr
-            else:
-                wk_diff=[]
-                for list1_c, list2_p in zip(wk_list_prev, wk_list_curr ):        
-                    wk_diff.append(list1_c-list2_p)
-
-            print('diff={}'.format(wk_diff))
-
-            wk_ratio = softmax(wk_diff).tolist()    
-            print('wk_ratio={}'.format(wk_ratio))
-
-            #wk_ratio = [x / sum(wk_diff) for x in wk_diff]
-            #keep wk to previous
-            wk_list_prev = wk_list_curr
-        else:
-            wk_ratio =  [1] * parties 
-            wk_ratio = [x / parties for x in wk_ratio]
-##------------------------------------------------------------------    
-        if args.FedPer:
-            model_list = FedPer(model_list,wk_ratio, args.mGPUs)
-        else:
-            model_list = FedUtils.avgWeight(model_list,wk_ratio)
-        
-        
-
-        save_name = os.path.join(output_dir, 'faster_rcnn_'+args.dataset+'_AVG_{}.pth'.format(i))
-        save_checkpoint({
-          #'session': 1,
-          'round': i,
-          'model':  model_list[0].module.state_dict() if args.mGPUs else model_list[0].state_dict(), 
-          'optimizer': optimizer.state_dict(),
-          'pooling_mode': cfg.POOLING_MODE,
-          'class_agnostic': args.class_agnostic,
-        }, save_name)
+    model = train(args, s_dataloader,t_dataloader,s_imdb,iters_per_epoch, fasterRCNN, optimizer)
 
 
