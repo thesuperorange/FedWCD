@@ -535,6 +535,8 @@ if __name__ == '__main__':
 
 
     ROUND = args.round
+    #wk_list_prev =[1.4360854446785485, 1.3000240033435766]
+
     #wk_list_prev =[1.9260449632344736,1.6288783338524226,1.623319350129662]
     
     for i in range(start_round+1,ROUND+1):

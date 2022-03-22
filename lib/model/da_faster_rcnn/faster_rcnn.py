@@ -45,7 +45,7 @@ class _fasterRCNN(nn.Module):
 
         self.grid_size = cfg.POOLING_SIZE * 2 if cfg.CROP_RESIZE_WITH_MAX_POOL else cfg.POOLING_SIZE
         #self.RCNN_roi_crop = _RoICrop()
-        print("initial imageDA")
+        #print("initial imageDA")
         self.RCNN_imageDA = _ImageDA(self.dout_base_model)
         self.RCNN_instanceDA = _InstanceDA()
         self.consistency_loss = torch.nn.MSELoss(size_average=False)
@@ -98,7 +98,7 @@ class _fasterRCNN(nn.Module):
         rois = Variable(rois)
         # do roi pooling based on predicted rois
         
-        print(cfg.POOLING_MODE)
+        #print(cfg.POOLING_MODE)
         if cfg.POOLING_MODE == 'crop':
             # pdb.set_trace()
             # pooled_feat_anchor = _crop_pool_layer(base_feat, rois.view(-1, 5))

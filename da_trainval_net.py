@@ -70,7 +70,7 @@ def parse_args():
                         default=10000, type=int)
 
     parser.add_argument('--save_dir', dest='save_dir',
-                        help='directory to save models', default="/data/ztc/adaptation/Experiment/da_model",
+                        help='directory to save models', default="models",
                         type=str)
     parser.add_argument('--save_sub_dir', dest='save_sub_dir',
                         help='directory to save models', default="",
@@ -122,7 +122,7 @@ def parse_args():
                         default=False, type=bool)
     parser.add_argument('--resume_model_name', dest='resume_model_name',
                     help='resume model name')
-     
+
 #     parser.add_argument('--checksession', dest='checksession',
 #                         help='checksession to load model',
 #                         default=1, type=int)
@@ -249,7 +249,7 @@ def train(args,s_dataloader,t_dataloader,imdb_name,iters_per_epoch, fasterRCNN, 
         tgt_data_iter = iter(t_dataloader)
 
         for step in range(iters_per_epoch):
-            print(step)
+            #print(step)
             data = next(data_iter)
             tgt_data = next(tgt_data_iter)
             
@@ -423,6 +423,7 @@ if __name__ == '__main__':
     #   t_train_size = len(t_roidb)  # add flipped         image_index*2
 
     output_dir = args.save_dir + "/" + args.net + "/" + args.dataset + "/" + args.save_sub_dir
+    print(output_dir)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -462,7 +463,7 @@ if __name__ == '__main__':
     if args.cuda:
         cfg.CUDA = True
         print(cfg.CUDA)
-        
+
     
 
 #     # initilize the network here.
