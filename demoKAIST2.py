@@ -99,6 +99,7 @@ def parse_args():
 #                         help='webcam ID number',
 #                         default=-1, type=int)
     parser.add_argument("--output_folder", type=str, default="output_folder", help="path to output folder")
+    parser.add_argument("--dataset", type=str, default="KAIST", help="dataset")
     #  parser.add_argument("--channel", type=str, default="0", help="MI3 channel")
 
     args = parser.parse_args()
@@ -182,22 +183,43 @@ if __name__ == '__main__':
     # train set
     # -- Note: Use validation set and disable the flipped to enable faster loading.
 
-    input_dir = args.load_dir + "/" + args.net + "/KAIST/"+args.model_sub_dir
+    input_dir = args.load_dir + "/" + args.net + "/"+args.dataset+"/"+args.model_sub_dir
     if not os.path.exists(input_dir):
         raise Exception('There is no input directory for loading network from ' + input_dir)
     load_name = os.path.join(input_dir, args.model_name)
 
-    KAIST_classes = np.asarray(['__background__', 'person', 'people', 'cyclist'])
 
+        
+    if args.dataset == "pascal_voc":
+        args.imdb_name = "voc_2007_trainval"
+        args.imdbval_name = "voc_2007_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+    elif args.dataset == "coco":
+        args.imdb_name = "coco_2014_train+coco_2014_valminusminival"
+        args.imdbval_name = "coco_2014_minival"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+    elif args.dataset=='KAIST':
+        args.imdb_name = "KAIST_train"
+        args.imdbval_name = "KAIST_test"
+        
+        #classes = np.asarray(['__background__', 'person', 'people', 'cyclist'])
+    elif args.dataset=='MI3':
+        args.imdb_name = "MI3_train"
+        args.imdbval_name = "MI3_train"
+
+    imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
+    imdb.competition_mode(on=True)
+    imdb_classes=np.asarray(imdb.classes)        
+        
     # initilize the network here.
     if args.net == 'vgg16':
-        fasterRCNN = vgg16(KAIST_classes, pretrained=True, class_agnostic=args.class_agnostic)
+        fasterRCNN = vgg16(imdb_classes, pretrained=True, class_agnostic=args.class_agnostic)
     elif args.net == 'res101':
-        fasterRCNN = resnet(KAIST_classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
+        fasterRCNN = resnet(imdb_classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
     elif args.net == 'res50':
-        fasterRCNN = resnet(KAIST_classes, 50, pretrained=False, class_agnostic=args.class_agnostic)
+        fasterRCNN = resnet(imdb_classes, 50, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res152':
-        fasterRCNN = resnet(KAIST_classes, 152, pretrained=False, class_agnostic=args.class_agnostic)
+        fasterRCNN = resnet(imdb_classes, 152, pretrained=False, class_agnostic=args.class_agnostic)
     else:
         print("network is not defined")
         pdb.set_trace()
@@ -321,7 +343,7 @@ if __name__ == '__main__':
                     else:
                         box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS) \
                                      + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS)
-                    box_deltas = box_deltas.view(1, -1, 4 * len(KAIST_classes))
+                    box_deltas = box_deltas.view(1, -1, 4 * len(imdb_classes))
 
             pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
             pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
@@ -341,7 +363,7 @@ if __name__ == '__main__':
         image_number = os.path.splitext(os.path.basename(imglist[num_images]))[0]
         fo2 = open(output_result_folder + '/' + image_number + ".txt", "w")
 
-        for j in xrange(1, len(KAIST_classes)):
+        for j in xrange(1, len(imdb_classes)):
             inds = torch.nonzero(scores[:, j] > thresh).view(-1)
             # if there is det
             if inds.numel() > 0:
@@ -365,14 +387,14 @@ if __name__ == '__main__':
                     score = dets[i, -1]
                     bbox = tuple(int(np.round(x)) for x in dets[i, :4])
                     th = 0.5
-                    class_name = KAIST_classes[j].strip().replace(" ", "_")
+                    class_name = imdb_classes[j].strip().replace(" ", "_")
                     if score > th:
                         fo2.write(
                             class_name + ' ' + str(score) + ' ' + str(bbox[0]) + ' ' + str(bbox[1]) + ' ' + str(
                                 bbox[2]) + ' ' + str(bbox[3]) + '\n'
                         )
                 if vis:
-                    im2show = vis_detections(im2show, KAIST_classes[j], cls_dets.cpu().numpy(), 0.5)
+                    im2show = vis_detections(im2show, imdb_classes[j], cls_dets.cpu().numpy(), 0.5)
         fo2.close()
         misc_toc = time.time()
         nms_time = misc_toc - misc_tic

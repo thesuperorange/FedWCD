@@ -65,7 +65,7 @@ for split in ['train', 'val', 'test']:
     name = 'wider_face_{}'.format(split)
     __sets[name] = (lambda split=split: wider_face(split))
 
-for split in ['train', 'val', 'test']:
+for split in ['train', 'val', 'test','train_Bus','train_Pathway','train_Doorway','train_Room','train_Staircase']:
     name = 'MI3_{}'.format(split)
     __sets[name] = (lambda split=split: mi3(split))
 

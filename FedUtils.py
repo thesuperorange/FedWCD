@@ -1,7 +1,66 @@
+from model.faster_rcnn.vgg16_KD import vgg16 as vgg16KD
 from model.faster_rcnn.vgg16 import vgg16
+from model.da_faster_rcnn.vgg16 import vgg16 as vgg16DA
 from model.faster_rcnn.resnet import resnet
 import torch.nn as nn
 import torch
+
+
+# all vgg16 are same, but call different fasterRCNN
+
+def initial_network_KD(imdb_classes,args):
+    
+      # initilize the network here.
+    if args.net == 'vgg16':
+        fasterRCNN = vgg16KD(imdb_classes, pretrained=True, class_agnostic=args.class_agnostic)
+#     elif args.net == 'res101':
+#         fasterRCNN = resnet(imdb_classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
+#     elif args.net == 'res50':
+#         fasterRCNN = resnet(imdb_classes, 50, pretrained=True, class_agnostic=args.class_agnostic)
+#     elif args.net == 'res152':
+#         fasterRCNN = resnet(imdb_classes, 152, pretrained=True, class_agnostic=args.class_agnostic)
+    else:
+        print("network is not defined")
+        pdb.set_trace()
+
+    fasterRCNN.create_architecture()
+    
+
+
+    if args.cuda:
+        fasterRCNN.cuda()
+
+    if args.mGPUs:
+        fasterRCNN = nn.DataParallel(fasterRCNN)
+        
+
+        
+    return fasterRCNN
+
+def initial_network_DA(imdb_classes,args):
+    
+      # initilize the network here.
+    if args.net == 'vgg16':
+        fasterRCNN = vgg16DA(imdb_classes, pretrained=True, class_agnostic=args.class_agnostic)
+#     elif args.net == 'res101':
+#         fasterRCNN = resnet(imdb_classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
+#     elif args.net == 'res50':
+#         fasterRCNN = resnet(imdb_classes, 50, pretrained=True, class_agnostic=args.class_agnostic)
+#     elif args.net == 'res152':
+#         fasterRCNN = resnet(imdb_classes, 152, pretrained=True, class_agnostic=args.class_agnostic)
+    else:
+        print("network is not defined")
+        pdb.set_trace()
+
+    fasterRCNN.create_architecture()
+
+    if args.cuda:
+        fasterRCNN.cuda()
+
+    if args.mGPUs:
+        fasterRCNN = nn.DataParallel(fasterRCNN)
+ 
+    return fasterRCNN
 
 
 def initial_network(imdb_classes,args):
@@ -68,8 +127,33 @@ def load_model(imdb_classes,model_path, args,cfg):
     start_round = checkpoint['round']
     
     return model,optimizer, start_round
-    
 
+
+def load_model_DA(imdb_classes,model_path, args,cfg):
+    model = initial_network_DA(imdb_classes,args)
+    checkpoint = torch.load(model_path)
+    
+    if args.mGPUs:
+        model.module.load_state_dict(checkpoint['model'])
+    else:
+        model.load_state_dict(checkpoint['model'])
+    optimizer = getOptimizer(model,args,cfg)
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    
+    start_round = checkpoint['epoch']
+    
+    return model, optimizer, start_epoch
+
+def load_model_KD(imdb_classes,model_path, args,cfg):
+    model = initial_network_KD(imdb_classes,args)
+    checkpoint = torch.load(model_path)
+    
+    if args.mGPUs:
+        model.module.load_state_dict(checkpoint['model'])
+    else:
+        model.load_state_dict(checkpoint['model'])
+    
+    return model
 
 def avgWeight(model_list,ratio_list):
     parties = len(model_list)

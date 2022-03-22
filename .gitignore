@@ -2,6 +2,7 @@ data/*
 output/*
 models/*
 *.pkl
+core*
 
 ## PyTorch
 
