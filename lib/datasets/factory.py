@@ -13,6 +13,7 @@ from __future__ import print_function
 __sets = {}
 from datasets.pascal_voc import pascal_voc
 from datasets.coco import coco
+from datasets.cityscape import cityscape
 from datasets.imagenet import imagenet
 from datasets.vg import vg
 from datasets.wider_face import wider_face
@@ -25,6 +26,13 @@ for year in ['2007', '2012']:
   for split in ['train', 'val', 'trainval', 'test']:
     name = 'voc_{}_{}'.format(year, split)
     __sets[name] = (lambda split=split, year=year: pascal_voc(split, year))
+    
+    
+for year in ['2007', '2012']:
+  for split in ['train_s', 'train_t', 'train_all', 'test_s', 'test_t','test_all']:
+    name = 'cityscape_{}_{}'.format(year, split)
+    __sets[name] = (lambda split=split, year=year: cityscape(split, year))
+
 
 # Set up coco_2014_<split>
 for year in ['2014']:
