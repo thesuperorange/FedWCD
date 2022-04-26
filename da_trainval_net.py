@@ -51,8 +51,13 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
     parser.add_argument('--dataset', dest='dataset',
-                        help='training dataset',
+                        help='source training dataset',
                         default='cityscape', type=str)
+    parser.add_argument('--dataset_t', dest='dataset_t',
+                        help='target training dataset',
+                        default='foggy_cityscape', type=str)
+    
+
     parser.add_argument('--net', dest='net',
                         help='vgg16, res101',
                         default='vgg16', type=str)
@@ -375,11 +380,9 @@ if __name__ == '__main__':
         args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
     elif args.dataset == "cityscape":
         print('loading our dataset...........')
-        args.s_imdb_name = "cityscape_2007_train_s"
-        args.t_imdb_name = "cityscape_2007_train_t"
-        args.s_imdbtest_name = "cityscape_2007_test_s"
-        args.t_imdbtest_name = "cityscape_2007_test_t"
-        args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+        args.s_imdb_name = "cityscape_2007_trainval"
+        args.s_imdbtest_name = "cityscape_2007_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
     elif args.dataset == "pascal_voc_0712":
         args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
         args.imdbval_name = "voc_2007_test"
@@ -398,7 +401,31 @@ if __name__ == '__main__':
         args.imdb_name = "vg_150-50-50_minitrain"
         args.imdbval_name = "vg_150-50-50_minival"
         args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
-
+    elif args.dataset == "kitti":
+        args.s_imdb_name = "kitti_train"
+        args.s_imdbtest_name = "kitti_val"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']       
+    elif args.dataset == "sim10k":
+        args.s_imdb_name = "sim10k_trainval10k"
+        #args.s_imdbtest_name = "sim10k_train"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+#-------------------target dataset        
+        
+    if args.dataset_t == "foggy_cityscape":
+        args.t_imdb_name = "foggy_cityscape_2007_train"
+        args.t_imdbtest_name = "foggy_cityscape_2007_test"
+        args.set_cfgs_target = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+    elif args.dataset_t == "kitti":
+        args.t_imdb_name = "kitti_train"
+        args.t_imdbtest_name = "kitti_val"
+        args.set_cfgs_target = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']  
+        
+    elif args.dataset_t == "bdd100k":
+        args.t_imdb_name = "bdd100k_train"
+        args.t_imdbtest_name = "bdd100k_val"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+                
+        
     args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
     if args.cfg_file is not None:

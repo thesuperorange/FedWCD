@@ -37,23 +37,24 @@ except NameError:
 # <<<< obsolete
 
 
-class cityscape(imdb):
-    def __init__(self, image_set, year, devkit_path=None):
-        imdb.__init__(self, 'cityscape_' + year + '_' + image_set)
-        self._year = year
+class bdd100k(imdb):
+    def __init__(self, image_set, devkit_path=None):
+        imdb.__init__(self, 'bdd100k_' + image_set)
+        
         self._image_set = image_set
 
-        self._devkit_path = self._get_default_path() if devkit_path is None \
-            else devkit_path
-        self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)
+      
+        self._data_path = self._get_default_path()
 
 
-        self._classes = ('__background__',
-                         'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
+        self._classes = ('__background__',  # always index 0
+                         'person', 'rider', 'car', 'bus'
+                         'truck', 'bike', 'motor',
+                         'traffic light', 'traffic sign', 'train')
 
 
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
-        self._image_ext = '.png'
+        self._image_ext = '.jpg'
         self._image_index = self._load_image_set_index()     # train image name without .jpg
 
         # Default to roidb handler
@@ -70,8 +71,8 @@ class cityscape(imdb):
                        'rpn_file': None,
                        'min_size': 2}
 
-        assert os.path.exists(self._devkit_path), \
-            'VOCdevkit path does not exist: {}'.format(self._devkit_path)
+  #      assert os.path.exists(self._devkit_path), \
+  #          'VOCdevkit path does not exist: {}'.format(self._devkit_path)
         assert os.path.exists(self._data_path), \
             'Path does not exist: {}'.format(self._data_path)
 
@@ -123,7 +124,7 @@ class cityscape(imdb):
         """
         Return the default path where PASCAL VOC is expected to be installed.
         """
-        return os.path.join(cfg.DATA_DIR, 'cityscape')
+        return os.path.join(cfg.DATA_DIR, 'BDD100K')
 
     def gt_roidb(self):
         """

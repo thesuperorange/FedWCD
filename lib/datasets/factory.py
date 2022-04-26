@@ -14,6 +14,11 @@ __sets = {}
 from datasets.pascal_voc import pascal_voc
 from datasets.coco import coco
 from datasets.cityscape import cityscape
+from datasets.foggy_cityscape import foggy_cityscape
+from datasets.kitti import kitti
+from datasets.sim10k import sim10k
+from datasets.bdd100k import bdd100k
+
 from datasets.imagenet import imagenet
 from datasets.vg import vg
 from datasets.wider_face import wider_face
@@ -29,10 +34,19 @@ for year in ['2007', '2012']:
     
     
 for year in ['2007', '2012']:
-  for split in ['train_s', 'train_t', 'train_all', 'test_s', 'test_t','test_all']:
+  for split in ['trainval', 'test']:  # trainval=train=2975, test=val=500
     name = 'cityscape_{}_{}'.format(year, split)
     __sets[name] = (lambda split=split, year=year: cityscape(split, year))
 
+for year in ['2007', '2012']:
+  for split in ['train', 'test']:  #test=500=val
+    name = 'foggy_cityscape_{}_{}'.format(year, split)
+    __sets[name] = (lambda split=split, year=year: foggy_cityscape(split, year))    
+    
+for split in ['trainval10k']:
+  name = 'sim10k_{}'.format(split)
+  __sets[name] = (lambda split=split : sim10k(split))
+    
 
 # Set up coco_2014_<split>
 for year in ['2014']:
@@ -61,6 +75,16 @@ for version in ['150-50-20', '150-50-50', '500-150-80', '750-250-150', '1750-700
     for split in ['minitrain', 'smalltrain', 'train', 'minival', 'smallval', 'val', 'test']:
         name = 'vg_{}_{}'.format(version,split)
         __sets[name] = (lambda split=split, version=version: vg(version, split))
+
+for split in ['train', 'val']:
+    name = 'bdd100k_{}'.format(split)
+    __sets[name] = (lambda split=split: bdd100k(split))        
+        
+for split in ['train', 'val']:
+    name = 'kitti_{}'.format(split)
+    __sets[name] = (lambda split=split: kitti(split))
+#    tgt_name = 'kitti_{}_tgt'.format(split)
+#    __sets[tgt_name] = (lambda split=split, num_shot=num_shot: kitti(split, num_shot))        
         
 # set up image net.
 for split in ['train', 'val', 'val1', 'val2', 'test']:

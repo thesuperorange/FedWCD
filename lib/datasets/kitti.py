@@ -36,26 +36,19 @@ except NameError:
 
 # <<<< obsolete
 
-
-class cityscape(imdb):
-    def __init__(self, image_set, year, devkit_path=None):
-        imdb.__init__(self, 'cityscape_' + year + '_' + image_set)
-        self._year = year
+# define the KITTI dataset for vehicle detection
+class kitti(imdb):
+    def __init__(self, image_set, num_shot=None):
+        imdb.__init__(self, 'kitti_' + image_set)
+        self.num_shot = num_shot
         self._image_set = image_set
 
-        self._devkit_path = self._get_default_path() if devkit_path is None \
-            else devkit_path
-        self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)
-
-
-        self._classes = ('__background__',
-                         'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
-
-
+        self._data_path = self._get_default_path() 
+        self._classes = ('__background__',  # always index 0
+                         'car','person')
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
-        self._image_index = self._load_image_set_index()     # train image name without .jpg
-
+        self._image_index = self._load_image_set_index()
         # Default to roidb handler
         # self._roidb_handler = self.selective_search_roidb
         self._roidb_handler = self.gt_roidb
@@ -64,14 +57,12 @@ class cityscape(imdb):
 
         # PASCAL specific config options
         self.config = {'cleanup': True,
-                       'use_salt': True,
+                       'use_salt': False,
                        'use_diff': False,
                        'matlab_eval': False,
                        'rpn_file': None,
                        'min_size': 2}
 
-        assert os.path.exists(self._devkit_path), \
-            'VOCdevkit path does not exist: {}'.format(self._devkit_path)
         assert os.path.exists(self._data_path), \
             'Path does not exist: {}'.format(self._data_path)
 
@@ -86,7 +77,6 @@ class cityscape(imdb):
         Return the absolute path to image i in the image sequence.
         """
         return i
-
     def image_path_from_index(self, index):
         """
         Construct an image path from the image's "index" identifier.
@@ -121,25 +111,27 @@ class cityscape(imdb):
 
     def _get_default_path(self):
         """
-        Return the default path where PASCAL VOC is expected to be installed.
+        Return the default path where KITTI is expected to be installed.
         """
-        return os.path.join(cfg.DATA_DIR, 'cityscape')
+        return os.path.join(cfg.DATA_DIR, 'KITTI')
 
     def gt_roidb(self):
         """
         Return the database of ground-truth regions of interest.
-
         This function loads/saves from/to a cache file to speed up future calls.
         """
+        if self.num_shot is None:
+            cache_file = os.path.join(self.cache_path, self.name + '_gt_roidb.pkl')
+        else:
+            cache_file = os.path.join(self.cache_path, self.name + '_tgt_gt_roidb.pkl')
 
-        cache_file = os.path.join(self.cache_path, self.name + '_gt_roidb.pkl')
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:
-                roidb = pickle.load(fid)
+                roidb = pickle.load(fid, encoding='iso-8859-1')
             print('{} gt roidb loaded from {}'.format(self.name, cache_file))
             return roidb
 
-        gt_roidb = [self._load_pascal_annotation(index)
+        gt_roidb = [self._load_city_annotation(index)
                     for index in self.image_index]
         with open(cache_file, 'wb') as fid:
             pickle.dump(gt_roidb, fid, pickle.HIGHEST_PROTOCOL)
@@ -151,7 +143,6 @@ class cityscape(imdb):
         """
         Return the database of selective search regions of interest.
         Ground-truth ROIs are also included.
-
         This function loads/saves from/to a cache file to speed up future calls.
         """
         cache_file = os.path.join(self.cache_path,
@@ -159,7 +150,7 @@ class cityscape(imdb):
 
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:
-                roidb = pickle.load(fid)
+                roidb = pickle.load(fid, encoding='iso-8859-1')
             print('{} ss roidb loaded from {}'.format(self.name, cache_file))
             return roidb
 
@@ -213,7 +204,7 @@ class cityscape(imdb):
 
         return self.create_roidb_from_box_list(box_list, gt_roidb)
 
-    def _load_pascal_annotation(self, index):
+    def _load_city_annotation(self, index):
         """
         Load image and bounding boxes info from XML file in the PASCAL VOC
         format.
@@ -242,10 +233,15 @@ class cityscape(imdb):
         for ix, obj in enumerate(objs):
             bbox = obj.find('bndbox')
             # Make pixel indexes 0-based
-            x1 = float(bbox.find('xmin').text) - 1
-            y1 = float(bbox.find('ymin').text) - 1
-            x2 = float(bbox.find('xmax').text) - 1
-            y2 = float(bbox.find('ymax').text) - 1
+            # x1 = float(bbox.find('xmin').text)
+            # y1 = float(bbox.find('ymin').text)
+            # x2 = float(bbox.find('xmax').text) - 1
+            # y2 = float(bbox.find('ymax').text) - 1
+
+            x1 = max(float(bbox.find('xmin').text), 0)
+            y1 = max(float(bbox.find('ymin').text), 0)
+            x2 = max(float(bbox.find('xmax').text), 0)
+            y2 = max(float(bbox.find('ymax').text), 0)
 
             diffc = obj.find('difficult')
             difficult = 0 if diffc == None else int(diffc.text)
@@ -253,11 +249,6 @@ class cityscape(imdb):
 
             cls = self._class_to_ind[obj.find('name').text.lower().strip()]
             boxes[ix, :] = [x1, y1, x2, y2]
-            if boxes[ix,0]>2048 or boxes[ix,1]>1024:
-                print(boxes[ix,:])
-                print(filename)
-                p=input()
-
             gt_classes[ix] = cls
             overlaps[ix, cls] = 1.0
             seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
@@ -279,7 +270,7 @@ class cityscape(imdb):
     def _get_voc_results_file_template(self):
         # VOCdevkit/results/VOC2007/Main/<comp_id>_det_test_aeroplane.txt
         filename = self._get_comp_id() + '_det_' + self._image_set + '_{:s}.txt'
-        filedir = os.path.join(self._devkit_path, 'results', 'VOC' + self._year, 'Main')
+        filedir = os.path.join(self._data_path, 'results')
         if not os.path.exists(filedir):
             os.makedirs(filedir)
         path = os.path.join(filedir, filename)
@@ -303,25 +294,23 @@ class cityscape(imdb):
                                        dets[k, 0] + 1, dets[k, 1] + 1,
                                        dets[k, 2] + 1, dets[k, 3] + 1))
 
-    def _do_python_eval(self, output_dir='output'):
+    def _do_python_eval(self, output_dir='output', epoch = 10):
         annopath = os.path.join(
-            self._devkit_path,
-            'VOC' + self._year,
-            'Annotations',
+            self._data_path,
+            'anno_' + self._image_set,
             '{:s}.xml')
         imagesetfile = os.path.join(
-            self._devkit_path,
-            'VOC' + self._year,
-            'ImageSets',
-            'Main',
+            self._data_path,
             self._image_set + '.txt')
-        cachedir = os.path.join(self._devkit_path, 'annotations_cache')
+        cachedir = os.path.join(self._data_path, 'annotations_cache')
         aps = []
         # The PASCAL VOC metric changed in 2010
-        use_07_metric = True if int(self._year) < 2010 else False
+        use_07_metric = False
         print('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
         if not os.path.isdir(output_dir):
             os.mkdir(output_dir)
+        results = open(os.path.join(output_dir, 'results.txt'), 'a')
+        results.write('Epoch {}:\n'.format(str(epoch)))
         for i, cls in enumerate(self._classes):
             if cls == '__background__':
                 continue
@@ -331,9 +320,12 @@ class cityscape(imdb):
                 use_07_metric=use_07_metric)
             aps += [ap]
             print('AP for {} = {:.4f}'.format(cls, ap))
+            results.write('AP for {} = {:.4f}\n'.format(cls, ap))
             with open(os.path.join(output_dir, cls + '_pr.pkl'), 'wb') as f:
                 pickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
         print('Mean AP = {:.4f}'.format(np.mean(aps)))
+        results.write('Mean AP = {:.4f}\n'.format(np.mean(aps)))
+        results.write('\n')
         print('~~~~~~~~')
         print('Results:')
         for ap in aps:
@@ -363,9 +355,9 @@ class cityscape(imdb):
         print('Running:\n{}'.format(cmd))
         status = subprocess.call(cmd, shell=True)
 
-    def evaluate_detections(self, all_boxes, output_dir):
+    def evaluate_detections(self, all_boxes, output_dir, epoch = 10):
         self._write_voc_results_file(all_boxes)
-        self._do_python_eval(output_dir)
+        self._do_python_eval(output_dir, epoch = epoch)
         if self.config['matlab_eval']:
             self._do_matlab_eval(output_dir)
         if self.config['cleanup']:
@@ -384,4 +376,9 @@ class cityscape(imdb):
             self.config['cleanup'] = True
 
 
+if __name__ == '__main__':
+    d = kitti('train')
+    res = d.roidb
+    from IPython import embed;
 
+    embed()
