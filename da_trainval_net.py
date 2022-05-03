@@ -370,19 +370,19 @@ if __name__ == '__main__':
         print('loading our dataset...........')
         args.imdb_name = "voc_2007_train"
         args.imdbval_name = "voc_2007_test"
-        args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
     elif args.dataset == "KAIST":
         print('loading KAIST dataset...........')
         args.s_imdb_name = "KAIST_road"
         args.t_imdb_name = "KAIST_downtown"
         args.s_imdbtest_name = "KAIST_test"
         args.t_imdbtest_name = "KAIST_test"
-        args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
     elif args.dataset == "cityscape":
         print('loading our dataset...........')
         args.s_imdb_name = "cityscape_2007_trainval"
         args.s_imdbtest_name = "cityscape_2007_test"
-        args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
     elif args.dataset == "pascal_voc_0712":
         args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
         args.imdbval_name = "voc_2007_test"
@@ -423,7 +423,7 @@ if __name__ == '__main__':
     elif args.dataset_t == "bdd100k":
         args.t_imdb_name = "bdd100k_train"
         args.t_imdbtest_name = "bdd100k_val"
-        args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
                 
         
     args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)

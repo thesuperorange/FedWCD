@@ -19,9 +19,13 @@ def parse_rec(filename):
   for obj in tree.findall('object'):
     obj_struct = {}
     obj_struct['name'] = obj.find('name').text
-    obj_struct['pose'] = obj.find('pose').text
+    #obj_struct['pose'] = obj.find('pose').text
     obj_struct['truncated'] = int(obj.find('truncated').text)
-    obj_struct['difficult'] = int(obj.find('difficult').text)
+    
+    diffc = obj.find('difficult')
+    # if no difficult, set difficult=0
+    obj_struct['difficult'] = int(obj.find('difficult').text) if diffc != None else 0
+    
     bbox = obj.find('bndbox')
     obj_struct['bbox'] = [int(bbox.find('xmin').text),
                           int(bbox.find('ymin').text),
@@ -101,7 +105,8 @@ def voc_eval(detpath,
   # first load gt
   if not os.path.isdir(cachedir):
     os.mkdir(cachedir)
-  cachefile = os.path.join(cachedir, '%s_annots.pkl' % imagesetfile)
+  cachefile = os.path.join(cachedir, '%s_annots.pkl' % classname)
+  print("cachefile="+cachefile)
   # read list of images
   with open(imagesetfile, 'r') as f:
     lines = f.readlines()

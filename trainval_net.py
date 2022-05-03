@@ -191,7 +191,10 @@ if __name__ == '__main__':
       args.imdb_name = "foggy_cityscape_2007_train"
       args.imdbtest_name = "foggy_cityscape_2007_test"
       args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']        
-
+  elif args.dataset == "kitti":
+      args.imdb_name = "kitti_train"
+      args.imdbtest_name = "kitti_val"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']    
   args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
   if args.cfg_file is not None:

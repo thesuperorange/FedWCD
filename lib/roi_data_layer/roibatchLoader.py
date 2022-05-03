@@ -52,8 +52,10 @@ class roibatchLoader(data.Dataset):
             # for ratio cross 1, we make it to be 1.
             target_ratio = 1
 
-        self.ratio_list_batch[left_idx:(right_idx+1)] = target_ratio
-
+        #self.ratio_list_batch[left_idx:(right_idx+1)] = target_ratio
+        # add for KITTI dataset
+        temp = torch.ones(batch_size)*target_ratio
+        self.ratio_list_batch[left_idx:(right_idx+1)] = temp
 
   def __getitem__(self, index):
     if self.training:
@@ -165,6 +167,8 @@ class roibatchLoader(data.Dataset):
                 gt_boxes[:, 2].clamp_(0, trim_size - 1)
 
         # based on the ratio, padding the image.
+        data_height, data_width = data[0].size(0), data[0].size(1)
+
         if ratio < 1:
             # this means that data_width < data_height
             trim_size = int(np.floor(data_width / ratio))

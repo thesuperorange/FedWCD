@@ -46,6 +46,8 @@ class sim10k(imdb):
         self._image_set = image_set
             
         self._data_path = self._get_default_path()
+        self._devkit_path = self._get_default_path()
+        
         self._classes = ('__background__',  # always index 0
                          'car')
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))

@@ -94,8 +94,15 @@ def parse_args():
   parser.add_argument('--vis', dest='vis',
                       help='visualization mode',
                       action='store_true')
+  parser.add_argument("--output_folder", type=str, default="output_folder", help="path to output folder")
+
   args = parser.parse_args()
   return args
+
+
+
+
+
 
 lr = cfg.TRAIN.LEARNING_RATE
 momentum = cfg.TRAIN.MOMENTUM
@@ -115,12 +122,12 @@ if __name__ == '__main__':
   if args.dataset == "pascal_voc":
       args.imdb_name = "voc_2007_trainval"
       args.imdbval_name = "voc_2007_test"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4,8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
   elif args.dataset == "cityscape":
       print('loading our dataset...........')
       #args.imdb_name = "cityscape_2007_train_s"      
       args.imdbtest_name="cityscape_2007_test"     
-      args.set_cfgs = ['ANCHOR_SCALES', '[4,8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+      args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
   elif args.dataset == "foggy_cityscape":        
         args.imdbtest_name = "foggy_cityscape_2007_test"
         args.set_cfgs_target = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']    
@@ -131,7 +138,7 @@ if __name__ == '__main__':
   elif args.dataset == "coco":
       args.imdb_name = "coco_2014_train+coco_2014_valminusminival"
       args.imdbval_name = "coco_2014_minival"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
   elif args.dataset == "imagenet":
       args.imdb_name = "imagenet_train"
       args.imdbval_name = "imagenet_val"
@@ -139,8 +146,11 @@ if __name__ == '__main__':
   elif args.dataset == "vg":
       args.imdb_name = "vg_150-50-50_minitrain"
       args.imdbval_name = "vg_150-50-50_minival"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
-
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "bdd100k":
+      args.imdb_name = "bdd100k_train"
+      args.imdbtest_name = "bdd100k_val"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
   args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
   if args.cfg_file is not None:
@@ -236,12 +246,16 @@ if __name__ == '__main__':
   else:
     thresh = 0.0
 
-  save_name = args.dataset+'_faster_rcnn_10'
+  #save_name = args.dataset+'_faster_rcnn_10'
   num_images = len(imdb.image_index)
   all_boxes = [[[] for _ in xrange(num_images)]
                for _ in xrange(imdb.num_classes)]
 
-  output_dir = get_output_dir(imdb, save_name)
+  output_dir = os.path.join('results',args.output_folder,args.imdbtest_name, 'det_pkl')  
+                            #get_output_dir(imdb, save_name)
+  if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
   dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, \
                         imdb.num_classes, training=False, normalize = False)
   dataloader = torch.utils.data.DataLoader(dataset, batch_size=1,
@@ -353,8 +367,12 @@ if __name__ == '__main__':
   with open(det_file, 'wb') as f:
       pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
 
-  print('Evaluating detections')
-  imdb.evaluate_detections(all_boxes, output_dir)
+  imdb._write_voc_results_file(all_boxes,args.output_folder)
+
+
+  #print('Evaluating detections')
+  #imdb.evaluate_detections(all_boxes, output_dir, args.output_folder)
+
 
   end = time.time()
   print("test time: %0.4fs" % (end - start))
