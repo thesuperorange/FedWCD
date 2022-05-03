@@ -3,7 +3,7 @@ output/*
 models/*
 *.pkl
 core*
-
+results/*
 ## PyTorch
 
 .mypy_cache
