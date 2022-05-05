@@ -32,6 +32,7 @@ from model.utils.net_utils import weights_normal_init, save_net, load_net, \
 
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
+from datasets.factory import get_imdb
 
 from frcnn_helper import *
 from scipy.special import softmax
@@ -42,10 +43,10 @@ import FedUtils
 
 #imdb_name = 'KAIST_train_cr'  
 data_cache_path = 'data/cache'
-imdb_classes =  ('__background__',  # always index 0
-                          'person',
-                          'people','cyclist'
-                         )
+#imdb_classes =  ('__background__',  # always index 0
+#                          'person',
+#                          'people','cyclist'
+#                         )
 #parties = len(imdb_list)
 
 def parse_args():
@@ -116,7 +117,7 @@ def parse_args():
     parser.add_argument('--f', dest='freeze',
                     help='freeze base layer or not',
                     action='store_true')
-    parser.add_argument('--input', dest='imdb_name',
+    parser.add_argument('--imdb_name', dest='imdb_name',
                         help='input imdb_name for loading pkl file')
     
     # weighted FedAvg
@@ -152,7 +153,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def load_client_dataset(imdb_name):
+def load_client_dataset(imdb_name,imdb_classes):
     #dataloader_list = []
     #iter_epochs_list = []
     #for imdb_name in imdb_list:
@@ -161,7 +162,7 @@ def load_client_dataset(imdb_name):
     with open(pkl_file, 'rb') as f:
         roidb = pickle.load(f)
 
-    roidb = filter_roidb(roidb)
+    #roidb = filter_roidb(roidb)
 
     ratio_list, ratio_index = rank_roidb_ratio(roidb)
 
@@ -398,11 +399,70 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer):
 if __name__ == '__main__':
 
     args = parse_args()
-    
-    imdb_name = args.imdb_name
-
     print('Called with args:')
     print(args)
+
+    if args.dataset == "MI3":
+        args.imdb_name = "MI3_train"
+        args.imdbval_name = "MI3_val"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+
+    elif args.dataset == "KAIST":
+        args.imdb_name = "KAIST_train"
+        args.imdbval_name = "KAIST_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+
+    elif args.dataset == "wider_face":
+        args.imdb_name = "wider_face_train"
+        args.imdbval_name = "wider_face_val"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+    elif args.dataset == "pascal_voc":
+        args.imdb_name = "voc_2007_trainval"
+        args.imdbval_name = "voc_2007_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+    elif args.dataset == "pascal_voc_0712":
+        args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
+        args.imdbval_name = "voc_2007_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+    elif args.dataset == "coco":
+        args.imdb_name = "coco_2014_train+coco_2014_valminusminival"
+        args.imdbval_name = "coco_2014_minival"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+    elif args.dataset == "imagenet":
+        args.imdb_name = "imagenet_train"
+        args.imdbval_name = "imagenet_val"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+    elif args.dataset == "vg":
+      # train sizes: train, smalltrain, minitrain
+      # train scale: ['150-50-20', '150-50-50', '500-150-80', '750-250-150', '1750-700-450', '1600-400-20']
+        args.imdb_name = "vg_150-50-50_minitrain"
+        args.imdbval_name = "vg_150-50-50_minival"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+    elif args.dataset == "foggy_cityscape":
+        args.imdb_name = "foggy_cityscape_2007_train"
+        args.imdbtest_name = "foggy_cityscape_2007_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']        
+    elif args.dataset == "kitti":
+        args.imdb_name = "kitti_train"
+        args.imdbtest_name = "kitti_val"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']  
+    elif args.dataset == "bdd100k":
+        args.imdb_name = "bdd100k_train"
+        args.imdbtest_name = "bdd100k_val"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+    elif args.dataset == "cityscape":
+        args.imdb_name = "cityscape_2007_trainval"      
+        args.imdbtest_name="cityscape_2007_test"     
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+        
+    elif args.dataset == "multi_ck":
+        args.imdb_name = "multi_ck_train"        
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']  
+    
+    args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)    
+    imdb_name = args.imdb_name
+
+
 
     if torch.cuda.is_available() and not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
@@ -413,8 +473,11 @@ if __name__ == '__main__':
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
+    imdb = get_imdb(args.imdb_name)
+    #data_path = imdb._data_path
+    imdb_classes = imdb._classes
     
-    dataloader,iters_per_epoch  = load_client_dataset(imdb_name)
+    dataloader,iters_per_epoch  = load_client_dataset(imdb_name,imdb_classes)
     #dataloader = dataloader_list[0]
     print('# worker' + str(args.num_workers))
     # initilize the tensor holder here.

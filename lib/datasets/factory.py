@@ -18,6 +18,7 @@ from datasets.foggy_cityscape import foggy_cityscape
 from datasets.kitti import kitti
 from datasets.sim10k import sim10k
 from datasets.bdd100k import bdd100k
+from datasets.multi_ck import multi_ck
 
 from datasets.imagenet import imagenet
 from datasets.vg import vg
@@ -105,7 +106,10 @@ for split in['train', 'test','campus', 'downtown','road','fake','train_cr','trai
     name = 'KAIST_{}'.format(split)
     __sets[name] = (lambda split=split: kaist(split))
 
-   
+#train city+kitti
+for split in ['train']:
+    name = 'multi_ck_{}'.format(split)
+    __sets[name] = (lambda split=split: multi_ck(split))
 
 def get_imdb(name):
   """Get an imdb (image database) by name."""
