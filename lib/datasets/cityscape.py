@@ -48,8 +48,8 @@ class cityscape(imdb):
         self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)
 
 
-        self._classes = ('__background__',
-                         'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
+        #self._classes = ('__background__', 'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
+        self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
 
 
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))

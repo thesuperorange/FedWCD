@@ -19,12 +19,15 @@ from datasets.kitti import kitti
 from datasets.sim10k import sim10k
 from datasets.bdd100k import bdd100k
 from datasets.multi_ck import multi_ck
+from datasets.multi_skf import multi_skf
+
 
 from datasets.imagenet import imagenet
 from datasets.vg import vg
 from datasets.wider_face import wider_face
 from datasets.mi3 import mi3
 from datasets.kaist import kaist
+
 import numpy as np
 
 # Set up voc_<year>_<split>
@@ -110,6 +113,11 @@ for split in['train', 'test','campus', 'downtown','road','fake','train_cr','trai
 for split in ['train']:
     name = 'multi_ck_{}'.format(split)
     __sets[name] = (lambda split=split: multi_ck(split))
+    
+#train foggy+sim10k+kitti
+for split in ['train']:
+    name = 'multi_skf_{}'.format(split)
+    __sets[name] = (lambda split=split: multi_skf(split))
 
 def get_imdb(name):
   """Get an imdb (image database) by name."""
