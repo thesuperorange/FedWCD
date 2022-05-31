@@ -112,9 +112,11 @@ class imdb(object):
             for i in range(self.num_images)]
 
   def append_flipped_images(self):
+    #print("[append_flipped_images]")
     num_images = self.num_images
     widths = self._get_widths()
-    #print(widths)
+    #print("#imgs={}, width={}".format(num_images,widths))
+    #print("roidb len={}".format(len(self.roidb)))
     for i in range(num_images):
       #print(i)
       boxes = self.roidb[i]['boxes'].copy()
@@ -131,8 +133,11 @@ class imdb(object):
                'gt_overlaps': self.roidb[i]['gt_overlaps'],
                'gt_classes': self.roidb[i]['gt_classes'],
                'flipped': True}
-      self.roidb.append(entry)
+      #print(entry)
+      self.roidb.append(entry)  #  entry without width and other info 
     self._image_index = self._image_index * 2
+    #print("self image index={}".format(self._image_index))
+    #print("roidb len={}".format(len(self.roidb)))
 
   # def evaluate_recall(self, candidate_boxes=None, thresholds=None,
   #                     area='all', limit=None):

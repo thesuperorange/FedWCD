@@ -40,6 +40,10 @@ if __name__ == '__main__':
 
     elif args.dataset == "bdd100k":
         args.imdb_name = "bdd100k_val"
+        
+    elif args.dataset == "kitti":
+        args.imdb_name = "kitti_val"
+     
     
     custermized_name = args.output_folder
 

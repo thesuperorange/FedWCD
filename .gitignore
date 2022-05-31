@@ -4,6 +4,7 @@ models/*
 *.pkl
 core*
 results/*
+*.tar
 ## PyTorch
 
 .mypy_cache

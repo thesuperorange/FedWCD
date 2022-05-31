@@ -61,9 +61,9 @@ def parse_args():
     parser.add_argument('--net', dest='net',
                         help='vgg16, res101',
                         default='vgg16', type=str)
-    parser.add_argument('--start_epoch', dest='start_epoch',
-                        help='starting epoch',
-                        default=1, type=int)
+#     parser.add_argument('--start_epoch', dest='start_epoch',
+#                         help='starting epoch',
+#                         default=1, type=int)
     parser.add_argument('--epochs', dest='max_epochs',
                         help='number of epochs to train',
                         default=20, type=int)
@@ -195,7 +195,7 @@ class sampler(Sampler):
     def __len__(self):
         return self.num_data
 
-def train(args,s_dataloader,t_dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer):
+def train(args,s_dataloader,t_dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, start_epoch):
     im_data = torch.FloatTensor(1)
     im_info = torch.FloatTensor(1)
     num_boxes = torch.LongTensor(1)
@@ -239,7 +239,7 @@ def train(args,s_dataloader,t_dataloader,imdb_name,iters_per_epoch, fasterRCNN, 
     
     lr=args.lr
     
-    for epoch in range(args.start_epoch, args.max_epochs + 1):
+    for epoch in range(start_epoch, args.max_epochs + 1):
         # setting to train mode
 
         fasterRCNN.train()
@@ -344,7 +344,7 @@ def train(args,s_dataloader,t_dataloader,imdb_name,iters_per_epoch, fasterRCNN, 
         save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(imdb_name, epoch, step))
         save_checkpoint({
             'session': args.session,
-            'epoch': epoch + 1,
+            'epoch': epoch ,
             'model': fasterRCNN.module.state_dict() if args.mGPUs else fasterRCNN.state_dict(),
             'optimizer': optimizer.state_dict(),
             'pooling_mode': cfg.POOLING_MODE,
@@ -409,6 +409,13 @@ if __name__ == '__main__':
         args.s_imdb_name = "sim10k_trainval10k"
         #args.s_imdbtest_name = "sim10k_train"
         args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+    elif args.dataset == "foggy_cityscape":
+        args.s_imdb_name = "foggy_cityscape_2007_train"
+        #args.imdbtest_name = "foggy_cityscape_2007_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+    elif args.dataset == "multi_skf":
+        args.s_imdb_name = "multi_skf_train"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20'] 
 #-------------------target dataset        
         
     if args.dataset_t == "foggy_cityscape":
@@ -424,7 +431,11 @@ if __name__ == '__main__':
         args.t_imdb_name = "bdd100k_train"
         args.t_imdbtest_name = "bdd100k_val"
         args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
-                
+    elif args.dataset_t == "cityscape":
+        
+        args.t_imdb_name = "cityscape_2007_trainval"
+        #args.s_imdbtest_name = "cityscape_2007_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']            
         
     args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
@@ -443,10 +454,10 @@ if __name__ == '__main__':
     cfg.TRAIN.USE_FLIPPED = True
     cfg.USE_GPU_NMS = args.cuda
 
-    #   s_imdb, s_roidb, s_ratio_list, s_ratio_index = combined_roidb(args.s_imdb_name)
+    #s_imdb, s_roidb, s_ratio_list, s_ratio_index = combined_roidb(args.s_imdb_name)
     #   s_train_size = len(s_roidb)  # add flipped         image_index*2
 
-    #   t_imdb, t_roidb, t_ratio_list, t_ratio_index = combined_roidb(args.t_imdb_name)
+    #t_imdb, t_roidb, t_ratio_list, t_ratio_index = combined_roidb(args.t_imdb_name)
     #   t_train_size = len(t_roidb)  # add flipped         image_index*2
 
     output_dir = args.save_dir + "/" + args.net + "/" + args.dataset + "/" + args.save_sub_dir
@@ -456,7 +467,7 @@ if __name__ == '__main__':
 
     s_imdb = get_imdb(args.s_imdb_name)
     imdb_classes = np.asarray(s_imdb.classes)
-    t_imdb = get_imdb(args.s_imdb_name)
+    t_imdb = get_imdb(args.t_imdb_name)
 
     s_dataloader, s_train_size = load_client_dataset_single(args.s_imdb_name, imdb_classes)
     t_dataloader, t_train_size = load_client_dataset_single(args.t_imdb_name, imdb_classes)
@@ -534,17 +545,20 @@ if __name__ == '__main__':
         load_name = os.path.join(output_dir,args.resume_model_name)
         print("loading checkpoint %s" % (load_name))
         
-        fasterRCNN, optimizer, args.start_epoch =FedUtils.load_model_DA(imdb_classes, load_name, args, cfg)
+        fasterRCNN, optimizer, start_epoch =FedUtils.load_model_DA(imdb_classes, load_name, args, cfg)
+        
+        print("start epoch={}".format(start_epoch))
 #         checkpoint = torch.load(load_name)
 #         args.session = checkpoint['session']
 #         args.start_epoch = checkpoint['epoch']
 #         fasterRCNN.load_state_dict(checkpoint['model'])
 #         optimizer.load_state_dict(checkpoint['optimizer'])
         lr = optimizer.param_groups[0]['lr']
-        if 'pooling_mode' in checkpoint.keys():
-            cfg.POOLING_MODE = checkpoint['pooling_mode']
+#         if 'pooling_mode' in checkpoint.keys():
+#             cfg.POOLING_MODE = checkpoint['pooling_mode']
         print("loaded checkpoint %s" % (load_name))
     else:
+        start_epoch = 1
         fasterRCNN = FedUtils.initial_network_DA(s_imdb.classes, args)
         optimizer = FedUtils.getOptimizer(fasterRCNN,args,cfg)
 
@@ -555,7 +569,7 @@ if __name__ == '__main__':
     if args.cuda:
         fasterRCNN.cuda()
    
-    train(args,s_dataloader,t_dataloader,args.s_imdb_name,iters_per_epoch, fasterRCNN, optimizer)
+    train(args,s_dataloader,t_dataloader,args.s_imdb_name,iters_per_epoch, fasterRCNN, optimizer,start_epoch)
     # iters_per_epoch = int(s_train_size / args.batch_size)
 
 #     if args.use_tfboard:

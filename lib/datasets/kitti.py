@@ -42,14 +42,16 @@ class kitti(imdb):
         imdb.__init__(self, 'kitti_' + image_set)
         self.num_shot = num_shot
         self._image_set = image_set
+        self._year='2007'
 
         self._data_path = self._get_default_path() 
         
         
         self._devkit_path =self._get_default_path()
-
-        self._classes = ('__background__',  # always index 0
-                         'car','person')
+        self._classes =('__background__', 'car', 'person','rider', 'train', 'truck')
+#        self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
+        #self._classes = ('__background__', 'car','person')
+#        self._classes = ('__background__', 'car')
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
@@ -216,6 +218,16 @@ class kitti(imdb):
         filename = os.path.join(self._data_path, 'Annotations', index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
+        
+        
+        
+        ## check class first, then set num_objs
+        num_objs = 0
+        for obj in objs:
+            if obj.find('name').text.lower().strip() in self._classes:
+                num_objs+=1
+                
+        
         # if not self.config['use_diff']:
         #     # Exclude the samples labeled as difficult
         #     non_diff_objs = [
@@ -224,7 +236,8 @@ class kitti(imdb):
         #     #     print 'Removed {} difficult objects'.format(
         #     #         len(objs) - len(non_diff_objs))
         #     objs = non_diff_objs
-        num_objs = len(objs)
+        
+        #num_objs = len(objs)
 
         boxes = np.zeros((num_objs, 4), dtype=np.uint16)
         gt_classes = np.zeros((num_objs), dtype=np.int32)
@@ -234,28 +247,34 @@ class kitti(imdb):
         ishards = np.zeros((num_objs), dtype=np.int32)
 
         # Load object bounding boxes into a data frame.
-        for ix, obj in enumerate(objs):
-            bbox = obj.find('bndbox')
-            # Make pixel indexes 0-based
-            # x1 = float(bbox.find('xmin').text)
-            # y1 = float(bbox.find('ymin').text)
-            # x2 = float(bbox.find('xmax').text) - 1
-            # y2 = float(bbox.find('ymax').text) - 1
+        ix =0
+        for obj in objs:
+            if obj.find('name').text.lower().strip() in self._classes:
+                cls = self._class_to_ind[obj.find('name').text.lower().strip()]
+            
+                bbox = obj.find('bndbox')
+                # Make pixel indexes 0-based
+                # x1 = float(bbox.find('xmin').text)
+                # y1 = float(bbox.find('ymin').text)
+                # x2 = float(bbox.find('xmax').text) - 1
+                # y2 = float(bbox.find('ymax').text) - 1
 
-            x1 = max(float(bbox.find('xmin').text), 0)
-            y1 = max(float(bbox.find('ymin').text), 0)
-            x2 = max(float(bbox.find('xmax').text), 0)
-            y2 = max(float(bbox.find('ymax').text), 0)
+                x1 = max(float(bbox.find('xmin').text), 0)
+                y1 = max(float(bbox.find('ymin').text), 0)
+                x2 = max(float(bbox.find('xmax').text), 0)
+                y2 = max(float(bbox.find('ymax').text), 0)
 
-            diffc = obj.find('difficult')
-            difficult = 0 if diffc == None else int(diffc.text)
-            ishards[ix] = difficult
+                diffc = obj.find('difficult')
+                difficult = 0 if diffc == None else int(diffc.text)
+                ishards[ix] = difficult
 
-            cls = self._class_to_ind[obj.find('name').text.lower().strip()]
-            boxes[ix, :] = [x1, y1, x2, y2]
-            gt_classes[ix] = cls
-            overlaps[ix, cls] = 1.0
-            seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
+                boxes[ix, :] = [x1, y1, x2, y2]
+                gt_classes[ix] = cls
+                overlaps[ix, cls] = 1.0
+                seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
+                ix+=1
+            else:
+                continue
 
         overlaps = scipy.sparse.csr_matrix(overlaps)
 
@@ -271,7 +290,7 @@ class kitti(imdb):
                    else self._comp_id)
         return comp_id
 
-    def _get_voc_results_file_template(self):
+    def _get_voc_results_file_template(self,custermized_name):
         # VOCdevkit/results/VOC2007/Main/<comp_id>_det_test_aeroplane.txt
         filename = self._get_comp_id() + '_det_' + self._image_set + '_{:s}.txt'
         filedir = os.path.join(self._data_path, 'results')
@@ -280,12 +299,12 @@ class kitti(imdb):
         path = os.path.join(filedir, filename)
         return path
 
-    def _write_voc_results_file(self, all_boxes):
+    def _write_voc_results_file(self, all_boxes,custermized_name):
         for cls_ind, cls in enumerate(self.classes):
             if cls == '__background__':
                 continue
             print('Writing {} VOC results file'.format(cls))
-            filename = self._get_voc_results_file_template().format(cls)
+            filename = self._get_voc_results_file_template(custermized_name).format(cls)
             with open(filename, 'wt') as f:
                 for im_ind, index in enumerate(self.image_index):
                     dets = all_boxes[cls_ind][im_ind]
@@ -318,7 +337,7 @@ class kitti(imdb):
         for i, cls in enumerate(self._classes):
             if cls == '__background__':
                 continue
-            filename = self._get_voc_results_file_template().format(cls)
+            filename = self._get_voc_results_file_template(custermized_name).format(cls)
             rec, prec, ap = voc_eval(
                 filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.5,
                 use_07_metric=use_07_metric)
@@ -368,7 +387,7 @@ class kitti(imdb):
             for cls in self._classes:
                 if cls == '__background__':
                     continue
-                filename = self._get_voc_results_file_template().format(cls)
+                filename = self._get_voc_results_file_template(custermized_name).format(cls)
                 os.remove(filename)
 
     def competition_mode(self, on):

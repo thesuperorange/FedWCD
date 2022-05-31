@@ -202,6 +202,12 @@ if __name__ == '__main__':
   elif args.dataset == "multi_skf":
       args.imdb_name = "multi_skf_train"
       args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20'] 
+  elif args.dataset == "cityscape":
+      print('loading our dataset...........')
+      args.imdb_name = "cityscape_2007_trainval"      
+      #args.imdbtest_name="cityscape_2007_test"     
+      args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+    
   args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
   if args.cfg_file is not None:
@@ -319,9 +325,9 @@ if __name__ == '__main__':
 
   iters_per_epoch = int(train_size / args.batch_size)
 
-  if args.use_tfboard:
-    from tensorboardX import SummaryWriter
-    logger = SummaryWriter("logs")
+#   if args.use_tfboard:
+#     from tensorboardX import SummaryWriter
+#     logger = SummaryWriter("logs")
 
 
   print('iters_per_epoch'+str(iters_per_epoch))

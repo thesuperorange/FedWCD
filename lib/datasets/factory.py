@@ -84,7 +84,7 @@ for split in ['train', 'val']:
     name = 'bdd100k_{}'.format(split)
     __sets[name] = (lambda split=split: bdd100k(split))        
         
-for split in ['train', 'val']:
+for split in ['train', 'val','train_small']:
     name = 'kitti_{}'.format(split)
     __sets[name] = (lambda split=split: kitti(split))
 #    tgt_name = 'kitti_{}_tgt'.format(split)

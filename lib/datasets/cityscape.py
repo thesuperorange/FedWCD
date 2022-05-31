@@ -47,10 +47,12 @@ class cityscape(imdb):
             else devkit_path
         self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)
 
+        self._classes =('__background__', 'car', 'person','rider', 'train', 'truck')
 
         #self._classes = ('__background__', 'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
-        self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
-
+        #self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
+        #self._classes = ('__background__', 'car','person')
+#        self._classes = ('__background__', 'car')
 
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
@@ -221,6 +223,13 @@ class cityscape(imdb):
         filename = os.path.join(self._data_path, 'Annotations', index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
+        
+        num_objs = 0
+        for obj in objs:
+            if obj.find('name').text.lower().strip() in self._classes:
+                num_objs+=1
+                
+        
         # if not self.config['use_diff']:
         #     # Exclude the samples labeled as difficult
         #     non_diff_objs = [
@@ -229,7 +238,8 @@ class cityscape(imdb):
         #     #     print 'Removed {} difficult objects'.format(
         #     #         len(objs) - len(non_diff_objs))
         #     objs = non_diff_objs
-        num_objs = len(objs)
+        
+        #num_objs = len(objs)
 
         boxes = np.zeros((num_objs, 4), dtype=np.uint16)
         gt_classes = np.zeros((num_objs), dtype=np.int32)
@@ -239,28 +249,34 @@ class cityscape(imdb):
         ishards = np.zeros((num_objs), dtype=np.int32)
 
         # Load object bounding boxes into a data frame.
-        for ix, obj in enumerate(objs):
-            bbox = obj.find('bndbox')
-            # Make pixel indexes 0-based
-            x1 = float(bbox.find('xmin').text) - 1
-            y1 = float(bbox.find('ymin').text) - 1
-            x2 = float(bbox.find('xmax').text) - 1
-            y2 = float(bbox.find('ymax').text) - 1
+        ix =0
+        for obj in objs:
+            if obj.find('name').text.lower().strip() in self._classes:
+                cls = self._class_to_ind[obj.find('name').text.lower().strip()]
+            
+                bbox = obj.find('bndbox')
+                # Make pixel indexes 0-based
+                # x1 = float(bbox.find('xmin').text)
+                # y1 = float(bbox.find('ymin').text)
+                # x2 = float(bbox.find('xmax').text) - 1
+                # y2 = float(bbox.find('ymax').text) - 1
 
-            diffc = obj.find('difficult')
-            difficult = 0 if diffc == None else int(diffc.text)
-            ishards[ix] = difficult
+                x1 = max(float(bbox.find('xmin').text), 0)
+                y1 = max(float(bbox.find('ymin').text), 0)
+                x2 = max(float(bbox.find('xmax').text), 0)
+                y2 = max(float(bbox.find('ymax').text), 0)
 
-            cls = self._class_to_ind[obj.find('name').text.lower().strip()]
-            boxes[ix, :] = [x1, y1, x2, y2]
-            if boxes[ix,0]>2048 or boxes[ix,1]>1024:
-                print(boxes[ix,:])
-                print(filename)
-                p=input()
+                diffc = obj.find('difficult')
+                difficult = 0 if diffc == None else int(diffc.text)
+                ishards[ix] = difficult
 
-            gt_classes[ix] = cls
-            overlaps[ix, cls] = 1.0
-            seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
+                boxes[ix, :] = [x1, y1, x2, y2]
+                gt_classes[ix] = cls
+                overlaps[ix, cls] = 1.0
+                seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
+                ix+=1
+            else:
+                continue
 
         overlaps = scipy.sparse.csr_matrix(overlaps)
 
@@ -377,7 +393,7 @@ class cityscape(imdb):
             for cls in self._classes:
                 if cls == '__background__':
                     continue
-                filename = self._get_voc_results_file_template().format(cls)
+                filename = self._get_voc_results_file_template(customized_name).format(cls)
                 os.remove(filename)
 
     def competition_mode(self, on):

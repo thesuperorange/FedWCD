@@ -22,17 +22,19 @@ def prepare_roidb(imdb):
 
   roidb = imdb.roidb
   if not (imdb.name.startswith('coco')):
-    print('imdb num images:'+str(imdb.num_images))
+    #print('imdb num images:'+str(imdb.num_images))
     sizes = [PIL.Image.open(imdb.image_path_at(i)).size
          for i in range(imdb.num_images)]
          
   for i in range(len(imdb.image_index)):
     roidb[i]['img_id'] = imdb.image_id_at(i)
     roidb[i]['image'] = imdb.image_path_at(i)
+    
     if not (imdb.name.startswith('coco')):
       roidb[i]['width'] = sizes[i][0]
       roidb[i]['height'] = sizes[i][1]
     # need gt_overlaps as a dense array for argmax
+    
     gt_overlaps = roidb[i]['gt_overlaps'].toarray()
     # max overlap with gt over classes (columns)
     max_overlaps = gt_overlaps.max(axis=1)
@@ -47,6 +49,8 @@ def prepare_roidb(imdb):
     # max overlap > 0 => class should not be zero (must be a fg class)
     nonzero_inds = np.where(max_overlaps > 0)[0]
     assert all(max_classes[nonzero_inds] != 0)
+    
+    #print("{}: width={}".format(i,roidb[i]['width']))
 
 
 def rank_roidb_ratio(roidb):
@@ -100,10 +104,22 @@ def combined_roidb(imdb_names, training=True):
 
   def get_training_roidb(imdb):
     """Returns a roidb (Region of Interest database) for use in training."""
-    if cfg.TRAIN.USE_FLIPPED:
-      print('Appending horizontally-flipped training examples...')
-      imdb.append_flipped_images()
-      print('done')
+    
+    
+    imdb_num_after_flip = imdb.num_images*2
+    actual_imdb_num = len(imdb.roidb)
+    
+    #print(imdb_num_after_flip)
+    #print(actual_imdb_num)
+
+    if cfg.TRAIN.USE_FLIPPED :
+      if actual_imdb_num<imdb_num_after_flip:
+        
+        print('Appending horizontally-flipped training examples...')
+        imdb.append_flipped_images()
+        print('done')
+      else:
+        print("imdb is already flipped...")
 
     print('Preparing training data...')
 
@@ -122,7 +138,10 @@ def combined_roidb(imdb_names, training=True):
     return roidb
 
   roidbs = [get_roidb(s) for s in imdb_names.split('+')]
+  
   roidb = roidbs[0]
+  print("roidb len={}".format(len(roidb)))
+
   if len(roidbs) > 1:
     for r in roidbs[1:]:
       roidb.extend(r)

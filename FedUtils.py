@@ -140,7 +140,7 @@ def load_model_DA(imdb_classes,model_path, args,cfg):
     optimizer = getOptimizer(model,args,cfg)
     optimizer.load_state_dict(checkpoint['optimizer'])
     
-    start_round = checkpoint['epoch']
+    start_epoch = checkpoint['epoch']
     
     return model, optimizer, start_epoch
 

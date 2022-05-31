@@ -20,7 +20,7 @@ def parse_rec(filename):
     obj_struct = {}
     obj_struct['name'] = obj.find('name').text
     #obj_struct['pose'] = obj.find('pose').text
-    obj_struct['truncated'] = int(obj.find('truncated').text)
+    #obj_struct['truncated'] = int(obj.find('truncated').text)
     
     diffc = obj.find('difficult')
     # if no difficult, set difficult=0

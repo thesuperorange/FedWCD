@@ -469,7 +469,18 @@ if __name__ == '__main__':
     elif args.dataset=='MI3':
         args.imdb_name = "MI3_train"
         args.imdbval_name = "MI3_train"
-        imdb_list = ['MI3_train_Bus','MI3_train_Staircase','MI3_train_Room','MI3_train_Doorway','MI3_train_Pathway']        
+        imdb_list = ['MI3_train_Bus','MI3_train_Staircase','MI3_train_Room','MI3_train_Doorway','MI3_train_Pathway']   
+    elif args.dataset=='CK2B':
+        args.imdb_name = "multi_ck"
+        #args.imdbval_name = "KAIST_test"
+        imdb_list = [  'cityscape_2007_train','kitti_train']
+        test_pkl=''
+    elif args.dataset=='SKF2C':
+        args.imdb_name = "multi_skf"
+        #args.imdbval_name = "KAIST_test"
+        imdb_list = [  'sim10k_trainval10k','kitti_train','foggy_cityscape_2007_train']
+        test_pkl=''
+    
     else:
         raise Exception('this dataset is not supported')
         

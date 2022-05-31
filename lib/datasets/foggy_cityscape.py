@@ -48,7 +48,9 @@ class foggy_cityscape(imdb):
         self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)
 
         #self._data_path = os.path.join(self._devkit_path)
-        self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
+        self._classes =('__background__', 'car', 'person','rider', 'train', 'truck')
+
+#        self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
 
         #self._classes = ('__background__', 'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
@@ -270,7 +272,7 @@ class foggy_cityscape(imdb):
                    else self._comp_id)
         return comp_id
 
-    def _get_voc_results_file_template(self):
+    def _get_voc_results_file_template(self, custermized_name):
         # VOCdevkit/results/VOC2007/Main/<comp_id>_det_test_aeroplane.txt
         filename = self._get_comp_id() + '_det_' + self._image_set + '_{:s}.txt'
         filedir = os.path.join(self._devkit_path, 'results', 'cityscape', 'Main')
@@ -279,12 +281,12 @@ class foggy_cityscape(imdb):
         path = os.path.join(filedir, filename)
         return path
 
-    def _write_voc_results_file(self, all_boxes):
+    def _write_voc_results_file(self, all_boxes,customized_name):
         for cls_ind, cls in enumerate(self.classes):
             if cls == '__background__':
                 continue
             print('Writing {} VOC results file'.format(cls))
-            filename = self._get_voc_results_file_template().format(cls)
+            filename = self._get_voc_results_file_template(customized_name).format(cls)
             with open(filename, 'wt') as f:
                 for im_ind, index in enumerate(self.image_index):
                     dets = all_boxes[cls_ind][im_ind]
@@ -297,7 +299,7 @@ class foggy_cityscape(imdb):
                                        dets[k, 0] + 1, dets[k, 1] + 1,
                                        dets[k, 2] + 1, dets[k, 3] + 1))
 
-    def _do_python_eval(self, output_dir='output'):
+    def _do_python_eval(self, customized_name, output_dir='output'):
         annopath = os.path.join(
             self._data_path,
             'Annotations',
@@ -317,7 +319,7 @@ class foggy_cityscape(imdb):
         for i, cls in enumerate(self._classes):
             if cls == '__background__':
                 continue
-            filename = self._get_voc_results_file_template().format(cls)
+            filename = self._get_voc_results_file_template(customized_name).format(cls)
             rec, prec, ap = voc_eval(
                 filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.5,
                 use_07_metric=use_07_metric)
@@ -359,16 +361,16 @@ class foggy_cityscape(imdb):
         print('Running:\n{}'.format(cmd))
         status = subprocess.call(cmd, shell=True)
 
-    def evaluate_detections(self, all_boxes, output_dir):
-        self._write_voc_results_file(all_boxes)
-        self._do_python_eval(output_dir)
+    def evaluate_detections(self, all_boxes, output_dir,customized_name):
+        self._write_voc_results_file(all_boxes,customized_name)
+        self._do_python_eval(customized_name,output_dir)
         if self.config['matlab_eval']:
             self._do_matlab_eval(output_dir)
         if self.config['cleanup']:
             for cls in self._classes:
                 if cls == '__background__':
                     continue
-                filename = self._get_voc_results_file_template().format(cls)
+                filename = self._get_voc_results_file_template(customized_name).format(cls)
                 os.remove(filename)
 
     def competition_mode(self, on):

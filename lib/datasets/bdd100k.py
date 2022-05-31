@@ -48,7 +48,9 @@ class bdd100k(imdb):
         self._devkit_path = self._get_default_path()
 
         # temp classes, for consistency
-        self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
+        self._classes =('__background__', 'car', 'person','rider', 'train', 'truck')
+
+#        self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
         #self._classes = ('__background__', 'car',  'person')
                         #, 'rider', #'car', 
                         # 'bus',

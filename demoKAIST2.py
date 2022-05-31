@@ -395,6 +395,9 @@ if __name__ == '__main__':
                         )
                 if vis:
                     im2show = vis_detections(im2show, imdb_classes[j], cls_dets.cpu().numpy(), 0.5)
+        if vis :         
+            result_path = os.path.join(output_img_folder, imglist[num_images][:-4] + ".jpg")
+            cv2.imwrite(result_path, im2show)
         fo2.close()
         misc_toc = time.time()
         nms_time = misc_toc - misc_tic
