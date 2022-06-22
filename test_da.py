@@ -125,7 +125,7 @@ if __name__ == '__main__':
     elif args.dataset == "cityscape":
         print('loading our dataset...........')
         # args.imdb_name = "cityscape_2007_train_s"      
-        args.imdbtest_nam e ="cityscape_2007_test"
+        args.imdbtest_name ="cityscape_2007_test"
         args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
     elif args.dataset == "foggy_cityscape":
         args.imdbtest_name = "foggy_cityscape_2007_test"
@@ -189,7 +189,7 @@ if __name__ == '__main__':
     # load_name = os.path.join(input_dir,
     #   'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
 
-    load_nam e =args.model_dir
+    load_name =args.model_dir
 
     # initilize the network here.
     if args.net == 'vgg16':

@@ -47,8 +47,8 @@ class multi_skf(imdb):
             else devkit_path
         #self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)
         self._data_path = self._get_default_path() 
-
-        self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
+        self._classes =('__background__', 'car', 'person','rider', 'train', 'truck')
+        #self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
         #self._classes = ('__background__', 'car', # bg always index 0
         #                 'person')
         #self._classes = ('__background__',
@@ -248,32 +248,34 @@ class multi_skf(imdb):
         ishards = np.zeros((num_objs), dtype=np.int32)
 
         # Load object bounding boxes into a data frame.
-        for ix, obj in enumerate(objs):
-            bbox = obj.find('bndbox')
-            # Make pixel indexes 0-based
-            x1 = max(float(bbox.find('xmin').text), 0)
-            y1 = max(float(bbox.find('ymin').text), 0)
-            x2 = min(float(bbox.find('xmax').text), width)
-            y2 = min(float(bbox.find('ymax').text), height)
-
-            diffc = obj.find('difficult')
-            difficult = 0 if diffc == None else int(diffc.text)
-            ishards[ix] = difficult
+        ix =0
+        for obj in objs:
+            if obj.find('name').text.lower().strip() in self._classes:
+                cls = self._class_to_ind[obj.find('name').text.lower().strip()]
             
-            #sim10k contains motorbike, wordaround
-            if('motorbike' == obj.find('name').text.lower().strip()):
+                bbox = obj.find('bndbox')
+                # Make pixel indexes 0-based
+                # x1 = float(bbox.find('xmin').text)
+                # y1 = float(bbox.find('ymin').text)
+                # x2 = float(bbox.find('xmax').text) - 1
+                # y2 = float(bbox.find('ymax').text) - 1
+
+                x1 = max(float(bbox.find('xmin').text), 0)
+                y1 = max(float(bbox.find('ymin').text), 0)
+                x2 = max(float(bbox.find('xmax').text), 0)
+                y2 = max(float(bbox.find('ymax').text), 0)
+
+                diffc = obj.find('difficult')
+                difficult = 0 if diffc == None else int(diffc.text)
+                ishards[ix] = difficult
+
+                boxes[ix, :] = [x1, y1, x2, y2]
+                gt_classes[ix] = cls
+                overlaps[ix, cls] = 1.0
+                seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
+                ix+=1
+            else:
                 continue
-
-            cls = self._class_to_ind[obj.find('name').text.lower().strip()]
-            boxes[ix, :] = [x1, y1, x2, y2]
-            if boxes[ix,0]>2048 or boxes[ix,1]>1024:
-                print(boxes[ix,:])
-                print(filename)
-                p=input()
-
-            gt_classes[ix] = cls
-            overlaps[ix, cls] = 1.0
-            seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
 
         overlaps = scipy.sparse.csr_matrix(overlaps)
 

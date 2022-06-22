@@ -169,16 +169,19 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def load_client_dataset(imdb_list,imdb_classes):
+def load_client_dataset(imdb_list,args):
     dataloader_list = []
     iter_epochs_list = []
+    
     for imdb_name in imdb_list:
         pkl_file = os.path.join(data_cache_path, imdb_name + '_gt_roidb.pkl')
 
+#         imdb, roidb, ratio_list, ratio_index = combined_roidb(imdb_name)
+        
         with open(pkl_file, 'rb') as f:
             roidb = pickle.load(f)
 
-        roidb = filter_roidb(roidb)
+        #roidb = filter_roidb(roidb)
 
         ratio_list, ratio_index = rank_roidb_ratio(roidb)
 
@@ -189,10 +192,11 @@ def load_client_dataset(imdb_list,imdb_classes):
         iter_epochs_list.append(iters_per_epoch)
         sampler_batch = sampler(train_size, args.batch_size)
 
-        dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, imdb_classes, training=True)
+        dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, imdb.num_classes, training=True)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
                                                  sampler=sampler_batch, num_workers=args.num_workers)
         dataloader_list.append(dataloader)
+    
     return dataloader_list, iter_epochs_list
 
 
@@ -267,7 +271,7 @@ class sampler(Sampler):
 #     return optimizer
 
 
-def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_round):     
+def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_round,lr):     
     im_data = torch.FloatTensor(1)
     im_info = torch.FloatTensor(1)
     num_boxes = torch.LongTensor(1)
@@ -286,7 +290,7 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_
     num_boxes = Variable(num_boxes)
     gt_boxes = Variable(gt_boxes)
     
-    lr = args.lr
+    #lr = args.lr
 
     
     
@@ -296,9 +300,7 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer, num_
         loss_temp = 0
         start = time.time()
 
-        if epoch % (args.lr_decay_step + 1) == 0:
-            adjust_learning_rate(optimizer, args.lr_decay_gamma)
-            lr *= args.lr_decay_gamma
+        ## move lr decay to round
 
         data_iter = iter(dataloader)
         for step in range(iters_per_epoch):
@@ -466,23 +468,42 @@ if __name__ == '__main__':
         args.imdb_name = "KAIST_train"
         args.imdbval_name = "KAIST_test"
         imdb_list = [  'KAIST_road','KAIST_downtown','KAIST_campus']
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        
     elif args.dataset=='MI3':
         args.imdb_name = "MI3_train"
         args.imdbval_name = "MI3_train"
         imdb_list = ['MI3_train_Bus','MI3_train_Staircase','MI3_train_Room','MI3_train_Doorway','MI3_train_Pathway']   
-    elif args.dataset=='CK2B':
-        args.imdb_name = "multi_ck"
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        
+    elif args.dataset=='multi_ck':
+        args.imdb_name = "multi_ck_train"
         #args.imdbval_name = "KAIST_test"
-        imdb_list = [  'cityscape_2007_train','kitti_train']
-        test_pkl=''
-    elif args.dataset=='SKF2C':
-        args.imdb_name = "multi_skf"
+        imdb_list = [  'kitti_train','cityscape_2007_trainval','bdd100k_val']
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        
+    elif args.dataset=='multi_skf':
+        args.imdb_name = "multi_skf_train"
         #args.imdbval_name = "KAIST_test"
-        imdb_list = [  'sim10k_trainval10k','kitti_train','foggy_cityscape_2007_train']
-        test_pkl=''
+        imdb_list = [  'sim10k_trainval10k','kitti_train','foggy_cityscape_2007_train','cityscape_2007_test']
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        
     
     else:
         raise Exception('this dataset is not supported')
+        
+        
+#-----------load cfg parameters
+    args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)    
+    imdb_name = args.imdb_name
+    
+    if args.cfg_file is not None:
+        cfg_from_file(args.cfg_file)
+    if args.set_cfgs is not None:
+        cfg_from_list(args.set_cfgs)
+
+    if torch.cuda.is_available() and not args.cuda:
+        print("WARNING: You have a CUDA device, so you should probably run with --cuda")
         
         
     # remove target scene from imdb list
@@ -496,7 +517,9 @@ if __name__ == '__main__':
     #imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
     #imdb.competition_mode(on=True)
     imdb = get_imdb(args.imdb_name)
+    #imdb_classes = imdb.num_classes
     imdb_classes=np.asarray(imdb.classes)   
+    #print(imdb_classes)
 
     
     output_dir = args.save_dir + "/" + args.net + "/" + args.dataset + "/" + args.save_sub_dir
@@ -504,7 +527,7 @@ if __name__ == '__main__':
         os.makedirs(output_dir)
     
     
-    dataloader_list,iter_epochs_list = load_client_dataset(imdb_list,imdb_classes)
+    dataloader_list,iter_epochs_list = load_client_dataset(imdb_list,args)#,imdb.num_classes)
     #dataloader = dataloader_list[0]
     print('# worker' + str(args.num_workers))
     # initilize the tensor holder here.
@@ -542,6 +565,7 @@ if __name__ == '__main__':
     else:
         for i in range(parties):
             model_list[i] = FedUtils.initial_network(imdb_classes, args)
+            lr = args.lr
         #optimizer = getOptimizer(model_list[idx],args)
 
 
@@ -551,14 +575,20 @@ if __name__ == '__main__':
     #wk_list_prev =[1.9260449632344736,1.6288783338524226,1.623319350129662]
     
     for i in range(start_round+1,ROUND+1):
+        
+        if i % (args.lr_decay_step + 1) == 0:
+            adjust_learning_rate(optimizer, args.lr_decay_gamma)
+            lr *= args.lr_decay_gamma
 
         for idx,dataloader_item in enumerate(dataloader_list):  
          #   if not args.resume:
           #      if i==1 :
            #         model_list[idx] = initial_network(args)
             optimizer = FedUtils.getOptimizer(model_list[idx],args,cfg)
+            if args.optimizer == "adam":
+                lr = lr * 0.1
 
-            model_list [idx] = train(args, dataloader_item,imdb_list[idx],iter_epochs_list[idx], model_list[idx], optimizer,i)
+            model_list [idx] = train(args, dataloader_item,imdb_list[idx],iter_epochs_list[idx], model_list[idx], optimizer,i,lr)
 ##--------------------gap statistic----------------------------------    
         
         if args.wkFedAvg:

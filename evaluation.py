@@ -65,8 +65,7 @@ if __name__ == '__main__':
     for i, cls in enumerate(classes):
         if cls == '__background__':
             continue
-        filename = imdb._get_voc_results_file_template(custermized_name).format(cls)      
-        
+        filename = imdb._get_voc_results_file_template(custermized_name).format(cls)   
         
         
         rec, prec, ap = voc_eval(

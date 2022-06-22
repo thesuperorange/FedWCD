@@ -41,13 +41,9 @@ import pickle
 
 import FedUtils
 
-#imdb_name = 'KAIST_train_cr'  
+
 data_cache_path = 'data/cache'
-#imdb_classes =  ('__background__',  # always index 0
-#                          'person',
-#                          'people','cyclist'
-#                         )
-#parties = len(imdb_list)
+
 
 def parse_args():
     """
@@ -153,32 +149,6 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def load_client_dataset(imdb_name,imdb_classes):
-    #dataloader_list = []
-    #iter_epochs_list = []
-    #for imdb_name in imdb_list:
-    pkl_file = os.path.join(data_cache_path, imdb_name + '_gt_roidb.pkl')
-
-    with open(pkl_file, 'rb') as f:
-        roidb = pickle.load(f)
-
-    #roidb = filter_roidb(roidb)
-
-    ratio_list, ratio_index = rank_roidb_ratio(roidb)
-
-    train_size = len(roidb)
-    print(train_size)
-    iters_per_epoch = int(train_size / args.batch_size)
-    print('iters_per_epoch: ' + str(iters_per_epoch))
-    #iter_epochs_list.append(iters_per_epoch)
-    sampler_batch = sampler(train_size, args.batch_size)
-
-    dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, imdb_classes, training=True)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
-                                             sampler=sampler_batch, num_workers=args.num_workers)
-    #dataloader_list.append(dataloader)
-    return dataloader,iters_per_epoch
-
 
 class sampler(Sampler):
     def __init__(self, train_size, batch_size):
@@ -204,51 +174,43 @@ class sampler(Sampler):
 
     def __len__(self):
         return self.num_data
+    
+def load_client_dataset(args): #(imdb_name,imdb_classes_num):
+    #dataloader_list = []
+    #iter_epochs_list = []
+    #for imdb_name in imdb_list:
+    
+    #--------------load pkl, comment temprary---------------
+    #pkl_file = os.path.join(data_cache_path, imdb_name + '_gt_roidb.pkl')
+
+    #with open(pkl_file, 'rb') as f:
+    #    roidb = pickle.load(f)
+
+    #roidb = filter_roidb(roidb)
+    #ratio_list, ratio_index = rank_roidb_ratio(roidb)
+    #--------------load pkl, comment temprary---------------
+    imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
 
     
-# def initial_network(args):
+
+    train_size = len(roidb)
+
+    print('{:d} roidb entries'.format(len(roidb)))
+
+    iters_per_epoch = int(train_size / args.batch_size)
+    print('iters_per_epoch: ' + str(iters_per_epoch))
     
-#       # initilize the network here.
-#     if args.net == 'vgg16':
-#         fasterRCNN = vgg16(imdb_classes, pretrained=True, class_agnostic=args.class_agnostic)
-#     elif args.net == 'res101':
-#         fasterRCNN = resnet(imdb_classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
-#     elif args.net == 'res50':
-#         fasterRCNN = resnet(imdb_classes, 50, pretrained=True, class_agnostic=args.class_agnostic)
-#     elif args.net == 'res152':
-#         fasterRCNN = resnet(imdb_classes, 152, pretrained=True, class_agnostic=args.class_agnostic)
-#     else:
-#         print("network is not defined")
-#         pdb.set_trace()
+    sampler_batch = sampler(train_size, args.batch_size)
+    print("##imdb.num_claases" + str(imdb.num_classes))
+    
 
-#     fasterRCNN.create_architecture()
+    dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, imdb.num_classes, training=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, sampler=sampler_batch, num_workers=args.num_workers)
+    #dataloader_list.append(dataloader)
+    return dataloader,iters_per_epoch
 
-#     if args.cuda:
-#         fasterRCNN.cuda()
 
-#     if args.mGPUs:
-#         fasterRCNN = nn.DataParallel(fasterRCNN)
-        
-#     return fasterRCNN
 
-# def getOptimizer(fasterRCNN,args):
-#     lr = args.lr
-#     params = []
-#     for key, value in dict(fasterRCNN.named_parameters()).items():
-#         if value.requires_grad:
-#             if 'bias' in key:
-#                 params += [{'params':[value],'lr':lr*(cfg.TRAIN.DOUBLE_BIAS + 1), \
-#                     'weight_decay': cfg.TRAIN.BIAS_DECAY and cfg.TRAIN.WEIGHT_DECAY or 0}]
-#             else:
-#                 params += [{'params':[value],'lr':lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
-                
-#     if args.optimizer == "adam":
-#         lr = lr * 0.1
-#         optimizer = torch.optim.Adam(params)
-
-#     elif args.optimizer == "sgd":
-#         optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM) 
-#     return optimizer
 
 
 def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer,lr):     
@@ -356,52 +318,14 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer,lr):
         
     return fasterRCNN    
         
-# def avgWeight(model_list,ratio_list):
-#     model_tmp=[None] * parties
-#     #optims_tmp=[None] * parties
-
-#     for idx, my_model in enumerate(model_list):
-        
-#         model_tmp[idx] = my_model.state_dict()
 
 
-#     for key in model_tmp[0]:    
-#         #print(key)
-#         model_avg = 0
-
-#         for idx, model_tmp_content in enumerate(model_tmp):     # add each model              
-#             model_avg += ratio_list[idx] * model_tmp_content[key]
-            
-#         for i in range(len(model_tmp)):  #copy to each model            
-#             model_tmp[i][key] = model_avg
-#     for i in range(len(model_list)):    
-#         model_list[i].load_state_dict(model_tmp[i])
-        
-#     return model_list  #, optims_tmp
-                    
-# def load_model(model_path, args):
-#     model = initial_network(args)
-#     checkpoint = torch.load(model_path)
-    
-#     if args.mGPUs:
-#         model.module.load_state_dict(checkpoint['model'])
-#     else:
-#         model.load_state_dict(checkpoint['model'])
-    
-#     optimizer = getOptimizer(model,args)
-#     optimizer.load_state_dict(checkpoint['optimizer'])
-    
-#     start_round = checkpoint['round']
-#     return model,optimizer, start_round
-
-
-    
 if __name__ == '__main__':
 
     args = parse_args()
+
     print('Called with args:')
     print(args)
-
     if args.dataset == "MI3":
         args.imdb_name = "MI3_train"
         args.imdbval_name = "MI3_val"
@@ -433,80 +357,91 @@ if __name__ == '__main__':
         args.imdbval_name = "imagenet_val"
         args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
     elif args.dataset == "vg":
-      # train sizes: train, smalltrain, minitrain
-      # train scale: ['150-50-20', '150-50-50', '500-150-80', '750-250-150', '1750-700-450', '1600-400-20']
         args.imdb_name = "vg_150-50-50_minitrain"
         args.imdbval_name = "vg_150-50-50_minival"
         args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
     elif args.dataset == "foggy_cityscape":
         args.imdb_name = "foggy_cityscape_2007_train"
         args.imdbtest_name = "foggy_cityscape_2007_test"
-        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']        
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
     elif args.dataset == "kitti":
         args.imdb_name = "kitti_train"
         args.imdbtest_name = "kitti_val"
-        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']  
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
     elif args.dataset == "bdd100k":
         args.imdb_name = "bdd100k_train"
         args.imdbtest_name = "bdd100k_val"
-        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
-    elif args.dataset == "cityscape":
-        args.imdb_name = "cityscape_2007_trainval"      
-        args.imdbtest_name="cityscape_2007_test"     
-        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
-        
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']    
     elif args.dataset == "multi_ck":
-        args.imdb_name = "multi_ck_train"        
-        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']  
-    
-    
+        args.imdb_name = "multi_ck_train"
+        # args.imdbtest_name = "kitti_val"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+    elif args.dataset == "multi_skf":
+        args.imdb_name = "multi_skf_train"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+    elif args.dataset == "cityscape":
+        args.imdb_name = "cityscape_2007_trainval"
+        # args.imdbtest_name="cityscape_2007_test"     
+        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
 
-    #-----------load cfg parameters
-    args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)    
-    imdb_name = args.imdb_name
-    
+    args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
+
     if args.cfg_file is not None:
         cfg_from_file(args.cfg_file)
     if args.set_cfgs is not None:
         cfg_from_list(args.set_cfgs)
 
+    print('Using config:')
+    pprint.pprint(cfg)
+    np.random.seed(cfg.RNG_SEED)
+
     if torch.cuda.is_available() and not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
 
-    output_dir = args.save_dir + "/" + args.net + "/" + args.dataset + "/" + args.save_sub_dir
+        
+    cfg.TRAIN.USE_FLIPPED = True
+    cfg.USE_GPU_NMS = args.cuda
+    
+    output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
     if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    
+        os.makedirs(output_dir)    
+        
     imdb = get_imdb(args.imdb_name)
-    #data_path = imdb._data_path
-    imdb_classes = imdb._classes
+    imdb_classes=np.asarray(imdb.classes)
     
-    dataloader,iters_per_epoch  = load_client_dataset(imdb_name,imdb_classes)
-    #dataloader = dataloader_list[0]
-    print('# worker' + str(args.num_workers))
-    # initilize the tensor holder here.
+    dataloader,iters_per_epoch = load_client_dataset(args)
     
-
     if args.cuda:
         cfg.CUDA = True
 
     fasterRCNN = FedUtils.initial_network(imdb_classes, args)
+
+    lr = args.lr
     
-    # freeze all VGG layer
-    if args.freeze == True:
-        if args.mGPUs:
-            for p in fasterRCNN.module.RCNN_base.parameters(): p.requires_grad=False
-        else:
-            for p in fasterRCNN.RCNN_base.parameters(): p.requires_grad=False
-                
-            
     optimizer = FedUtils.getOptimizer(fasterRCNN,args,cfg)
     
-    lr = args.lr
+    if args.cuda:
+        fasterRCNN.cuda()
+
     if args.optimizer == "adam":
-        lr = lr * 0.1        
-    train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer,lr)
+        lr = lr * 0.1
+
+#     if args.resume:
+#         load_name = os.path.join(output_dir,
+#                                  'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+#         print("loading checkpoint %s" % (load_name))
+#         checkpoint = torch.load(load_name)
+#         args.session = checkpoint['session']
+#         args.start_epoch = checkpoint['epoch']
+#         fasterRCNN.load_state_dict(checkpoint['model'])
+#         optimizer.load_state_dict(checkpoint['optimizer'])
+#         lr = optimizer.param_groups[0]['lr']
+#         if 'pooling_mode' in checkpoint.keys():
+#             cfg.POOLING_MODE = checkpoint['pooling_mode']
+#         print("loaded checkpoint %s" % (load_name))
         
+    if args.mGPUs:
+        fasterRCNN = nn.DataParallel(fasterRCNN)
 
-
+    train(args,dataloader,args.imdb_name,iters_per_epoch, fasterRCNN, optimizer,lr)
