@@ -62,17 +62,18 @@ if __name__ == '__main__':
     imagesetfile = os.path.join(  imdb._data_path,'ImageSets', 'Main', imdb._image_set + '.txt')
     cachedir = os.path.join(imdb._devkit_path, 'annotations_cache')
     aps = []    
+    print('TP,FP,Rec,Prec,AP')
     for i, cls in enumerate(classes):
         if cls == '__background__':
             continue
         filename = imdb._get_voc_results_file_template(custermized_name).format(cls)   
         
         
-        rec, prec, ap = voc_eval(
+        tp,fp,rec, prec, ap = voc_eval(
             filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.5, use_07_metric=use_07_metric)
         aps += [ap]
-        print(ap)
-        print('AP for {} = {:.4f}'.format(cls, ap))
+        print('{},{},{},{:.4f},{:.4f},{:.4f}'.format(cls, int(tp[-1]),int(fp[-1]),rec[-1],prec[-1],ap))
+#        print('AP for {} = {:.4f}'.format(cls, ap))
          
     print('Mean AP = {:.4f}'.format(np.mean(aps)))
     print('~~~~~~~~')

@@ -350,7 +350,7 @@ if __name__ == '__main__':
 
       if DEBUG_MODE:
           for batch_i in range(24):
-              #print(data[0].size())
+#              print(data[0].size())
               permute_data = data[0][batch_i].permute(1,2,0)
               array1 = permute_data.numpy()
               #print(array1.shape)

@@ -106,7 +106,7 @@ def voc_eval(detpath,
   if not os.path.isdir(cachedir):
     os.mkdir(cachedir)
   cachefile = os.path.join(cachedir, '%s_annots.pkl' % classname)
-  print("cachefile="+cachefile)
+  #print("cachefile="+cachefile)
   # read list of images
   with open(imagesetfile, 'r') as f:
     lines = f.readlines()
@@ -132,19 +132,28 @@ def voc_eval(detpath,
       except:
         recs = pickle.load(f, encoding='bytes')
 
+  ## count all bounding box in ground truth (include all classes)
+#  cc=0
+#  for rname in recs:
+#      cc+=len(rname)
+#  print(cc)
+
   # extract gt objects for this class
   class_recs = {}
   npos = 0
   for imagename in imagenames:
     R = [obj for obj in recs[imagename] if obj['name'] == classname]
     bbox = np.array([x['bbox'] for x in R])
+    
     difficult = np.array([x['difficult'] for x in R]).astype(np.bool)
     det = [False] * len(R)
+    
     npos = npos + sum(~difficult)
+#    npos_all += len(R)
     class_recs[imagename] = {'bbox': bbox,
                              'difficult': difficult,
                              'det': det}
-
+#  print(npos)
   # read dets
   detfile = detpath.format(classname)
   with open(detfile, 'r') as f:
@@ -156,6 +165,8 @@ def voc_eval(detpath,
   BB = np.array([[float(z) for z in x[2:]] for x in splitlines])
 
   nd = len(image_ids)
+# number of BB in detection results
+#  print(nd)
   tp = np.zeros(nd)
   fp = np.zeros(nd)
 
@@ -212,4 +223,4 @@ def voc_eval(detpath,
   prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
   ap = voc_ap(rec, prec, use_07_metric)
 
-  return rec, prec, ap
+  return tp,fp,rec, prec, ap

@@ -287,6 +287,10 @@ def train(args,dataloader,imdb_name,iters_per_epoch, fasterRCNN, optimizer,lr):
         data_iter = iter(dataloader)
         for step in range(iters_per_epoch):
             data = next(data_iter)
+#            print(data[0].size())
+#            print(data[1].size())
+#            print(data[2].size())
+#            print(data[3].size())
 
             with torch.no_grad():
                 im_data.resize_(data[0].size()).copy_(data[0])

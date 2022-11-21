@@ -36,12 +36,14 @@ class roibatchLoader(data.Dataset):
     self.data_size = len(self.ratio_list)
 
     # given the ratio_list, we want to make the ratio same for each batch.
+    #print(self.data_size)
     self.ratio_list_batch = torch.Tensor(self.data_size).zero_()
     num_batch = int(np.ceil(len(ratio_index) / batch_size))
     for i in range(num_batch):
         left_idx = i*batch_size
+        #print(left_idx)
         right_idx = min((i+1)*batch_size-1, self.data_size-1)
-
+        #print(right_idx)
         if ratio_list[right_idx] < 1:
             # for ratio < 1, we preserve the leftmost in each batch.
             target_ratio = ratio_list[left_idx]
@@ -53,9 +55,10 @@ class roibatchLoader(data.Dataset):
             target_ratio = 1
 
         #self.ratio_list_batch[left_idx:(right_idx+1)] = target_ratio
+        self.ratio_list_batch[left_idx:(right_idx+1)] = torch.tensor(target_ratio.astype(np.float64))
         # add for KITTI dataset
-        temp = torch.ones(batch_size)*target_ratio
-        self.ratio_list_batch[left_idx:(right_idx+1)] = temp
+        #temp = torch.ones(batch_size)*target_ratio
+        #self.ratio_list_batch[left_idx:(right_idx+1)] = temp
 
   def __getitem__(self, index):
     if self.training:
