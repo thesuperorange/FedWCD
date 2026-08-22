@@ -126,7 +126,7 @@ if __name__ == '__main__':
         print('loading our dataset...........')
         # args.imdb_name = "cityscape_2007_train_s"      
         args.imdbtest_name ="cityscape_2007_test"
-        args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
+     #   args.set_cfgs = ['ANCHOR_SCALES', '[8,16,32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
     elif args.dataset == "foggy_cityscape":
         args.imdbtest_name = "foggy_cityscape_2007_test"
         args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']

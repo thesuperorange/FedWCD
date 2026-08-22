@@ -47,15 +47,15 @@ class cityscape(imdb):
             else devkit_path
         self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)
 
-        self._classes =('__background__', 'car', 'person','rider', 'train', 'truck')
+        #self._classes =('__background__', 'car', 'person','rider', 'train', 'truck')
 
-        #self._classes = ('__background__', 'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
+        self._classes = ('__background__', 'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
         #self._classes = ('__background__', 'car', 'person', 'bus', 'bicycle', 'motorcycle','rider', 'train', 'truck')
         #self._classes = ('__background__', 'car','person')
 #        self._classes = ('__background__', 'car')
 
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
-        self._image_ext = '.png'
+        self._image_ext = '.jpg'
         self._image_index = self._load_image_set_index()     # train image name without .jpg
 
         # Default to roidb handler

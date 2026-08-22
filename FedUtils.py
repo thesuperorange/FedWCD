@@ -110,8 +110,8 @@ def getOptimizer(fasterRCNN,args,cfg):
     elif args.optimizer == "sgd":
         optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM) 
     return optimizer
-    
-    
+
+
 def load_model(imdb_classes,model_path, args,cfg):
     model = initial_network(imdb_classes,args)
     checkpoint = torch.load(model_path)
@@ -178,6 +178,6 @@ def avgWeight(model_list,ratio_list):
         model_list[i].load_state_dict(model_tmp[i])
         
     return model_list  #, optims_tmp
+
     
-    
-    
+

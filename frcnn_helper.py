@@ -19,7 +19,7 @@ def rcnn_intermediate(model, x):
     
     # flatten for FC layers.
     x = x.view(x.shape[0], -1)
-    
+
 #     # go through FC layers.
 #     for l in list(model.RCNN_top.modules())[0]:
 #         x = l(x)
